@@ -1,4 +1,4 @@
-# Painel mobile-first — Robo Vendas AI
+# NEXORA AI — Plataforma Autônoma de Vendas
 
 Protótipo PWA para controle pelo celular. Funciona em navegador e pode ser instalado na tela inicial do Android quando hospedado em HTTPS.
 
