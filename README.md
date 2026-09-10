@@ -1,23 +1,56 @@
-# Robô de Vendas AI — V1
+# NEXORA AI
 
-Projeto inicial de uma plataforma de vendas automatizada 24/7.
+> Inteligência que encontra, vende e evolui.
 
-## Módulo prioritário
-Motor de Inteligência Comercial:
+Plataforma de inteligência comercial e automação de vendas projetada para operar continuamente, identificar oportunidades, criar ofertas, atrair clientes, apoiar vendas, acompanhar resultados e aprender com métricas reais.
+
+## Visão
+
+O NEXORA AI tem como objetivo transformar processos comerciais em um sistema inteligente, automatizado e orientado por dados.
+
+A plataforma deverá ser capaz de:
+
+- descobrir oportunidades de mercado
+- identificar sinais de demanda
+- avaliar oportunidades automaticamente
+- criar e testar ofertas
+- apoiar aquisição de clientes
+- acompanhar o desempenho das vendas
+- aprender com métricas reais
+- melhorar continuamente suas decisões
+
+## MVP
+
+A primeira versão será construída de forma modular, permitindo evolução progressiva da plataforma.
+
+### Motor de Inteligência Comercial
+
+Módulo prioritário responsável por:
+
 - descoberta de oportunidades
-- sinais de demanda
-- Product Opportunity Score 0–100
+- análise de sinais de demanda
+- Product Opportunity Score (0–100)
 - regras de elegibilidade
-- ranking
+- ranking de oportunidades
 - testes controlados
-- aprendizado com métricas reais
+- avaliação de resultados
+- aprendizado baseado em métricas reais
 
-## Arquivos
-- `docs/PROJETO.md` — arquitetura geral
-- `docs/MOTOR_INTELIGENCIA_COMERCIAL.md` — motor e score
-- `database/schema_v1.sql` — estrutura PostgreSQL
-- `apps/api/COMMERCIAL_API.md` — contrato inicial da API
-- `docker-compose.yml` — PostgreSQL + Redis
+## Estrutura do projeto
 
-## Observação
-Tendência não é sinônimo de vendas. O motor usa sinais de mercado para gerar hipóteses e depois valida com dados reais do funil.
+```text
+.github/
+  workflows/
+
+apps/
+  └── módulos da aplicação
+
+database/
+  └── estrutura de dados
+
+docs/
+  └── documentação do projeto
+
+.env.example
+docker-compose.yml
+README.md
