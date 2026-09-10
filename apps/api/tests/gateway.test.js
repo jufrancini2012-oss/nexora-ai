@@ -1,0 +1,12 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import worker from '../src/worker.js';
+const req=(path,body)=>new Request('https://example.test'+path,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});
+const get=path=>new Request('https://example.test'+path);
+async function create(amount=100){return (await (await worker.fetch(req('/api/gateway/sandbox/create',{amount,idempotencyKey:crypto.randomUUID()}))).json()).payment;}
+
+test('sandbox payment requires idempotency',async()=>{const r=await worker.fetch(req('/api/gateway/sandbox/create',{amount:100}));assert.equal(r.status,400);});
+test('paid webhook creates exactly one sale and notification',async()=>{const p=await create(100);const signed=await (await worker.fetch(req('/api/gateway/sandbox/sign',{paymentId:p.id,status:'paid'}))).json();let r=await worker.fetch(req('/api/gateway/sandbox/webhook',{...signed,idempotencyKey:'evt-1'}));assert.equal(r.status,200);r=await worker.fetch(req('/api/gateway/sandbox/webhook',{...signed,idempotencyKey:'evt-1'}));assert.equal((await r.json()).duplicate,true);const state=await (await worker.fetch(get('/api/gateway/sandbox/state'))).json();assert.equal(state.sales.length,1);assert.equal(state.notifications.length,1);});
+test('invalid signature is rejected',async()=>{const p=await create(50);const signed=await (await worker.fetch(req('/api/gateway/sandbox/sign',{paymentId:p.id,status:'paid'}))).json();const r=await worker.fetch(req('/api/gateway/sandbox/webhook',{payload:signed.payload,signature:'bad',idempotencyKey:'evt-bad'}));assert.equal((await r.json()).status,401);});
+test('failed payment cannot create payout',async()=>{const p=await create(100);const signed=await (await worker.fetch(req('/api/gateway/sandbox/sign',{paymentId:p.id,status:'failed'}))).json();await worker.fetch(req('/api/gateway/sandbox/webhook',{...signed,idempotencyKey:'evt-fail'}));const r=await worker.fetch(req('/api/gateway/sandbox/payout',{paymentId:p.id}));assert.equal((await r.json()).ok,false);});
+test('paid payment can create simulated payout',async()=>{const p=await create(150);const signed=await (await worker.fetch(req('/api/gateway/sandbox/sign',{paymentId:p.id,status:'paid'}))).json();await worker.fetch(req('/api/gateway/sandbox/webhook',{...signed,idempotencyKey:'evt-pay'}));const r=await worker.fetch(req('/api/gateway/sandbox/payout',{paymentId:p.id}));assert.equal((await r.json()).ok,true);});
