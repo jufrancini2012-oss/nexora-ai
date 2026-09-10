@@ -1,0 +1,32 @@
+name: Bootstrap NEXORA AI source
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'nexora-ai-source.zip'
+
+permissions:
+  contents: write
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Extract source
+        run: |
+          unzip -o nexora-ai-source.zip -d .
+          rm -f nexora-ai-source.zip
+          rm -f BOOTSTRAP_WORKFLOW.yml
+
+      - name: Commit source
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet && exit 0
+          git commit -m "chore: bootstrap NEXORA AI source"
+          git push
