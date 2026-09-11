@@ -2,5 +2,10 @@ name = "nexora-ai"
 main = "src/worker.js"
 compatibility_date = "2026-09-05"
 
+[assets]
+directory = "../web"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+
 [vars]
 APP_MODE = "autonomo"
