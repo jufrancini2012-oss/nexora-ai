@@ -10,7 +10,7 @@ not_found_handling = "single-page-application"
 [[d1_databases]]
 binding = "DB"
 database_name = "nexora-ai"
-database_id = "REPLACE_WITH_D1_DATABASE_ID"
+database_id = "9fa5753d-1fec-40e6-b086-31387583bc1e"
 migrations_dir = "../../database/migrations"
 
 [vars]
