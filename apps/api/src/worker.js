@@ -38,7 +38,7 @@ function commercialPlan(){
   }));
 }
 
-async function route(request){
+async function route(request, env){
   if(request.method==='OPTIONS') return new Response(null,{status:204});
   const url=new URL(request.url), path=url.pathname;
 
@@ -127,15 +127,17 @@ async function route(request){
   if(path==='/api/gateway/asaas/sandbox/create' && request.method==='POST'){
     try {
       const body=await request.json().catch(()=>({}));
-      const client=createAsaasClient();
-      const customer=await client.createCustomer({name:body.customer?.name || 'Cliente NEXORA Sandbox', cpfCnpj:body.customer?.cpfCnpj || '24971563792', email:body.customer?.email, externalReference:body.orderId});
+      const client=createAsaasClient({apiKey:env?.ASAAS_API_KEY, baseUrl:env?.ASAAS_BASE_URL});
+      const customerPayload={name:body.customer?.name || 'Cliente NEXORA Sandbox', email:body.customer?.email, externalReference:body.orderId};
+      if(body.customer?.cpfCnpj) customerPayload.cpfCnpj=body.customer.cpfCnpj;
+      const customer=await client.createCustomer(customerPayload);
       const payment=await client.createPayment({customer:customer.id, billingType:body.billingType || 'PIX', value:Number(body.value), dueDate:body.dueDate || new Date(Date.now()+86400000).toISOString().slice(0,10), externalReference:body.orderId || crypto.randomUUID()}, body.idempotencyKey);
       let pix=null; if((body.billingType || 'PIX')==='PIX') pix=await client.getPixQrCode(payment.id);
       return json({ok:true, environment:'sandbox', customerId:customer.id, payment, pix});
     } catch(e){ return json({ok:false,error:e.message,status:e.status || 500}, e.status && e.status < 500 ? e.status : 500); }
   }
   if(path==='/api/gateway/asaas/sandbox/webhook' && request.method==='POST'){
-    const token=process.env.ASAAS_WEBHOOK_TOKEN;
+    const token=env?.ASAAS_WEBHOOK_TOKEN;
     if(!validateAsaasWebhook(request, token)) return json({ok:false,error:'ASAAS_WEBHOOK_UNAUTHORIZED'},401);
     const body=await request.json().catch(()=>({}));
     const eventId=body.id || crypto.randomUUID();
@@ -148,7 +150,7 @@ async function route(request){
 
 export default {
   async fetch(request, env) {
-    if (new URL(request.url).pathname.startsWith('/api/')) return cors(await route(request));
+    if (new URL(request.url).pathname.startsWith('/api/')) return cors(await route(request, env));
     return env.ASSETS.fetch(request);
   }
 };
