@@ -23,6 +23,14 @@ jobs:
         working-directory: apps/api
         run: npm test
 
+      - name: Aplicar migrações D1
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: apps/api
+          command: d1 migrations apply DB --remote
+
       - name: Deploy na Cloudflare
         uses: cloudflare/wrangler-action@v3
         with:
