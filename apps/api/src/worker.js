@@ -80,4 +80,12 @@ async function route(request){
   }
   return json({error:'not_found'},404);
 }
-export default { async fetch(request){ return cors(await route(request)); } };
+export default {.
+  async fetch(request, env) {
+    if (new URL(request.url).pathname.startsWith('/api/')) {
+      return cors(await route(request));
+    }
+    return env.ASSETS.fetch(request);
+  }
+};
+
