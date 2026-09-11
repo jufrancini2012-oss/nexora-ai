@@ -1,13 +1,15 @@
 const DEFAULT_BASE_URL = 'https://api-sandbox.asaas.com/v3';
 
-export function createAsaasClient({ apiKey = process.env.ASAAS_API_KEY, baseUrl = process.env.ASAAS_BASE_URL || DEFAULT_BASE_URL, fetchImpl = fetch } = {}) {
-  if (!apiKey) throw new Error('ASAAS_API_KEY_NOT_CONFIGURED');
+export function createAsaasClient({ apiKey, baseUrl, fetchImpl = fetch } = {}) {
+  const resolvedApiKey = apiKey;
+  const resolvedBaseUrl = baseUrl || DEFAULT_BASE_URL;
+  if (!resolvedApiKey) throw new Error('ASAAS_API_KEY_NOT_CONFIGURED');
 
   async function request(path, { method = 'GET', body, idempotencyKey } = {}) {
-    const headers = { access_token: apiKey, accept: 'application/json' };
+    const headers = { access_token: resolvedApiKey, accept: 'application/json' };
     if (body !== undefined) headers['content-type'] = 'application/json';
     if (idempotencyKey) headers['idempotency-key'] = idempotencyKey;
-    const res = await fetchImpl(`${baseUrl}${path}`, {
+    const res = await fetchImpl(`${resolvedBaseUrl}${path}`, {
       method,
       headers,
       body: body === undefined ? undefined : JSON.stringify(body)
@@ -28,7 +30,7 @@ export function createAsaasClient({ apiKey = process.env.ASAAS_API_KEY, baseUrl 
     getPixQrCode: paymentId => request(`/payments/${encodeURIComponent(paymentId)}/pixQrCode`),
     createWebhook: body => request('/webhooks', { method: 'POST', body }),
     getPayment: paymentId => request(`/payments/${encodeURIComponent(paymentId)}`),
-    baseUrl
+    baseUrl: resolvedBaseUrl
   };
 }
 
