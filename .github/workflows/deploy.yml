@@ -6,11 +6,8 @@ on:
       - main
   workflow_dispatch:
 
-permissions:
-  contents: read
-
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
 
     steps:
@@ -22,13 +19,9 @@ jobs:
         with:
           node-version: 20
 
-      - name: Verificar estrutura do projeto
-        run: |
-          echo "NEXORA AI preparado com sucesso."
-          echo "Verificando arquivos..."
-          test -f apps/web/index.html
-          test -f apps/web/api-client.js
-          echo "Estrutura web OK."
-
-      - name: Finalizar
-        run: echo "Deploy do NEXORA AI concluído."
+      - name: Deploy na Cloudflare
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: apps/api
