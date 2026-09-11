@@ -19,6 +19,10 @@ jobs:
         with:
           node-version: 20
 
+      - name: Testar API antes do deploy
+        working-directory: apps/api
+        run: npm test
+
       - name: Deploy na Cloudflare
         uses: cloudflare/wrangler-action@v3
         with:
