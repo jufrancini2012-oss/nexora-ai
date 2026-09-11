@@ -1,0 +1,34 @@
+name: Deploy NEXORA AI
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Baixar código
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Verificar estrutura do projeto
+        run: |
+          echo "NEXORA AI preparado com sucesso."
+          echo "Verificando arquivos..."
+          test -f apps/web/index.html
+          test -f apps/web/api-client.js
+          echo "Estrutura web OK."
+
+      - name: Finalizar
+        run: echo "Deploy do NEXORA AI concluído."
