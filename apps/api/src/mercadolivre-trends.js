@@ -1,3 +1,5 @@
+import { scoreOpportunity } from './opportunity-scoring.js';
+
 const SITE_ID = 'MLB';
 const BASE_URL = 'https://api.mercadolibre.com';
 
@@ -21,14 +23,13 @@ export async function fetchMercadoLivreTrends(accessToken) {
 export function trendScores(rank) {
   const r = Math.max(1, Number(rank) || 50);
   const demand = Math.max(20, Math.round(100 - ((r - 1) * 80 / 49)));
-  return {
+  return scoreOpportunity({
     demandScore: demand,
-    acceptanceScore: 0,
-    conversionScore: 0,
-    economicsScore: 0,
-    competitionScore: 0,
-    operationsScore: 0,
-    score: Math.round(demand * 0.35),
-    status: 'observe'
-  };
+    acceptanceScore: null,
+    conversionScore: null,
+    economicsScore: null,
+    competitionScore: null,
+    operationsScore: null,
+    margin: null
+  });
 }
