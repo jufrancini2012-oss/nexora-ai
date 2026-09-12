@@ -46,6 +46,18 @@
     },
     "daily_net_revenue_reinvestment_threshold_brl": 1000,
     "reinvestment_rate_above_threshold": 0.10,
-    "reinvestment_basis": "net_revenue"
+    "reinvestment_basis": "net_revenue",
+    "reinvestment_allocation": {
+      "product_promotion": 0.40,
+      "ai_and_automation": 0.25,
+      "cloud_infrastructure": 0.20,
+      "github_development": 0.15
+    },
+    "reinvestment_guardrails": {
+      "only_verified_net_revenue": true,
+      "only_when_daily_net_revenue_above_threshold": true,
+      "optimize_for_revenue_growth_and_system_reliability": true,
+      "human_approval_required_for_external_billing_changes": true
+    }
   }
 }
