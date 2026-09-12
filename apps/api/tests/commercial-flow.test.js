@@ -22,7 +22,7 @@ test('commercial selection uses supplied opportunities and only selects eligible
 
 test('commercial selection uses verified learning to reorder and demote weak outcomes',()=>{
   const products=[
-    {...eligibleProducts[0], outcome:{conversionRate:0.20,refundRate:0.10,chargebackRate:0}},
+    {...eligibleProducts[0], outcome:{conversionRate:null,refundRate:0.10,chargebackRate:0}},
     {...eligibleProducts[1]}
   ];
   const selected=selectCommercialProducts(products,policy);
