@@ -1,3 +1,5 @@
+import { rankWithLearning } from './learning-engine.js';
+
 const DEFAULT_OFFER = {
   type: 'direct',
   currency: 'BRL',
@@ -5,9 +7,15 @@ const DEFAULT_OFFER = {
 };
 
 export function selectCommercialProducts(products, policy) {
-  return products
-    .filter((p) => policy.autonomyEnabled && p.score >= policy.minScore && p.margin >= policy.minMargin && p.status !== 'blocked')
-    .sort((a, b) => b.score - a.score)
+  const eligible = products.filter((p) =>
+    policy.autonomyEnabled &&
+    p.score >= policy.minScore &&
+    p.margin >= policy.minMargin &&
+    p.status !== 'blocked'
+  );
+
+  return rankWithLearning(eligible)
+    .filter((p) => p.learning.learnedScore >= policy.minScore)
     .slice(0, policy.maxNewTestsPerDay);
 }
 
@@ -40,6 +48,7 @@ export function buildOffer(product, overrides = {}) {
       sourceUrl: product.sourceUrl || null,
       signals: product.signals || null
     },
+    learning: product.learning || null,
     status: 'active'
   };
 }
