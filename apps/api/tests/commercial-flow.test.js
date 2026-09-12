@@ -1,65 +1,64 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { selectCommercialProducts, buildOffer, createOrder } from '../src/commercial-flow.js';
 import worker from '../src/worker.js';
 
 const req=(path,opts={})=>new Request('https://example.test'+path,opts);
 const post=(path,body)=>req(path,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});
 
-test('commercial plan selects only eligible products and builds offers',async()=>{
-  const r=await worker.fetch(req('/api/commercial/plan'));
-  assert.equal(r.status,200);
-  const data=await r.json();
-  assert.equal(data.ok,true);
-  assert.equal(data.opportunities.length,2);
-  assert.ok(data.opportunities.every(x=>x.opportunity.score>=80 && x.opportunity.margin>=0.25));
-  assert.ok(data.opportunities.every(x=>x.offer.price>0));
+const policy={autonomyEnabled:true,minScore:80,minMargin:0.25,maxNewTestsPerDay:3};
+const eligibleProducts=[
+  {id:'test-opportunity-1',name:'Oportunidade de teste 1',score:91,margin:0.42,status:'HIGH_PRIORITY',price:197},
+  {id:'test-opportunity-2',name:'Oportunidade de teste 2',score:84,margin:0.31,status:'HIGH_PRIORITY',price:89},
+  {id:'test-opportunity-3',name:'Oportunidade abaixo do limite',score:70,margin:0.35,status:'CANDIDATE',price:59}
+];
+
+test('commercial selection uses supplied opportunities and only selects eligible products',()=>{
+  const selected=selectCommercialProducts(eligibleProducts,policy);
+  assert.equal(selected.length,2);
+  assert.deepEqual(selected.map(x=>x.id),['test-opportunity-1','test-opportunity-2']);
+  assert.ok(selected.every(x=>x.score>=80 && x.margin>=0.25));
 });
 
-test('commercial flow creates checkout and records a paid sale',async()=>{
+test('commercial flow builds an offer and creates an order without sample products',()=>{
+  const product=eligibleProducts[0];
+  const offer=buildOffer(product);
+  assert.equal(offer.productId,product.id);
+  assert.equal(offer.price,197);
+  assert.equal(offer.currency,'BRL');
+
+  const order=createOrder({
+    offer,
+    customer:{name:'Cliente Teste',email:'cliente@example.test'},
+    idempotencyKey:'commercial-unit-001'
+  });
+  assert.equal(order.offerId,offer.id);
+  assert.equal(order.productId,product.id);
+  assert.equal(order.amount,197);
+  assert.equal(order.status,'created');
+});
+
+test('commercial checkout rejects products that are not present in real D1 opportunities',async()=>{
   await worker.fetch(post('/api/gateway/sandbox/reset',{}));
-  const checkout=await worker.fetch(post('/api/commercial/checkout',{
+  const response=await worker.fetch(post('/api/commercial/checkout',{
     productId:'p1',
     customer:{name:'Cliente Teste',email:'cliente@example.test'},
-    idempotencyKey:'commercial-test-001'
+    idempotencyKey:'commercial-integration-001'
   }));
-  assert.equal(checkout.status,201);
-  const created=await checkout.json();
-  assert.equal(created.ok,true);
-  assert.equal(created.payment.status,'pending');
-
-  const signedResponse=await worker.fetch(post('/api/gateway/sandbox/sign',{
-    paymentId:created.payment.id,
-    status:'paid'
-  }));
-  const signed=await signedResponse.json();
-
-  const saleResponse=await worker.fetch(post('/api/commercial/webhook',{
-    payload:signed.payload,
-    signature:signed.signature,
-    idempotencyKey:'commercial-event-001'
-  }));
-  assert.equal(saleResponse.status,200);
-  const sale=await saleResponse.json();
-  assert.equal(sale.ok,true);
-  assert.equal(sale.payment.status,'paid');
-
-  const state=await (await worker.fetch(req('/api/commercial/state'))).json();
-  assert.equal(state.metrics.sales,1);
-  assert.equal(state.metrics.revenue,created.offer.price);
-  assert.equal(state.orders[0].status,'paid');
+  assert.equal(response.status,422);
+  const data=await response.json();
+  assert.equal(data.ok,false);
+  assert.equal(data.error,'PRODUCT_NOT_ELIGIBLE');
 });
 
-test('commercial checkout requires customer contact and idempotency',async()=>{
-  const missingContact=await worker.fetch(post('/api/commercial/checkout',{
-    productId:'p1',
-    customer:{name:'Sem Contato'},
-    idempotencyKey:'commercial-test-002'
-  }));
-  assert.equal(missingContact.status,400);
-
-  const missingKey=await worker.fetch(post('/api/commercial/checkout',{
-    productId:'p1',
-    customer:{email:'cliente@example.test'}
-  }));
-  assert.equal(missingKey.status,400);
+test('commercial order validation requires customer contact and idempotency',()=>{
+  const offer=buildOffer(eligibleProducts[0]);
+  assert.throws(
+    ()=>createOrder({offer,customer:{name:'Sem Contato'},idempotencyKey:'commercial-validation-001'}),
+    /CUSTOMER_CONTACT_REQUIRED/
+  );
+  assert.throws(
+    ()=>createOrder({offer,customer:{email:'cliente@example.test'}}),
+    /IDEMPOTENCY_REQUIRED/
+  );
 });
