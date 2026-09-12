@@ -27,23 +27,21 @@ jobs:
         working-directory: apps/api
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: 98cf18038e390ed6ff7684d12f4f6e2
         run: |
-          DB_INFO="$(curl -fsSL \
-            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/d1/database?name=nexora-ai&per_page=10")"
+          DB_INFO="$(npx --yes wrangler@4 d1 list --json)"
           DB_ID="$(printf '%s' "$DB_INFO" | node -e '
             let input = "";
             process.stdin.on("data", (chunk) => input += chunk);
             process.stdin.on("end", () => {
               const data = JSON.parse(input);
-              const db = (data.result || []).find((item) => item.name === "nexora-ai");
+              const list = Array.isArray(data) ? data : (data.result || []);
+              const db = list.find((item) => item.name === "nexora-ai");
               if (!db?.uuid) process.exit(1);
               process.stdout.write(db.uuid);
             });
           ')"
           if [ -z "$DB_ID" ]; then
-            echo "Não foi possível localizar o ID atual do D1 nexora-ai pela API do Cloudflare."
+            echo "Não foi possível localizar o ID atual do D1 nexora-ai pelo Wrangler."
             exit 1
           fi
           echo "D1 nexora-ai localizado; sincronizando o identificador no Wrangler."
