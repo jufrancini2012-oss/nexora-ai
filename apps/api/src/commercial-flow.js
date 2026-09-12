@@ -15,14 +15,28 @@ export function buildOffer(product, overrides = {}) {
   if (!product?.id) throw new Error('PRODUCT_REQUIRED');
   const price = Number(overrides.price ?? product.price ?? 0);
   if (!Number.isFinite(price) || price <= 0) throw new Error('VALID_PRICE_REQUIRED');
+  const margin = Number(product.margin);
+  const score = Number(product.score);
+  if (!Number.isFinite(margin) || !Number.isFinite(score)) throw new Error('VERIFIED_COMMERCIAL_DATA_REQUIRED');
+  if (score < 80 || margin < 0.25 || product.status === 'blocked') throw new Error('PRODUCT_NOT_READY_FOR_OFFER');
+
   return {
     id: overrides.id || `offer_${product.id}`,
     productId: product.id,
     name: overrides.name || `Oferta ${product.name}`,
     headline: overrides.headline || `${product.name}: uma solução simples para começar hoje`,
+    description: overrides.description || `Oferta baseada na oportunidade comercial ${product.id}, com critérios de seleção verificados pelo NEXORA AI.`,
     price,
     currency: overrides.currency || DEFAULT_OFFER.currency,
     checkout: DEFAULT_OFFER.checkout,
+    checkoutPath: `/api/commercial/checkout?productId=${encodeURIComponent(product.id)}`,
+    evidence: {
+      score,
+      margin,
+      source: product.source || null,
+      sourceUrl: product.sourceUrl || null,
+      signals: product.signals || null
+    },
     status: 'active'
   };
 }
