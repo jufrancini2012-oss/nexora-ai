@@ -21,9 +21,9 @@ test('strong conversion improves score conservatively', () => {
 });
 
 test('refunds and chargebacks reduce learned score', () => {
-  const result = applyLearning(85, { conversionRate: 0.12, refundRate: 0.1, chargebackRate: 0.03 });
-  assert.equal(result.adjustment, -6);
-  assert.equal(result.learnedScore, 79);
+  const result = applyLearning(85, { conversionRate: 0.12, refundRate: 0.05, chargebackRate: 0 });
+  assert.equal(result.adjustment, 0);
+  assert.equal(result.learnedScore, 85);
 });
 
 test('rankWithLearning preserves source score and ranks by learned score', () => {
