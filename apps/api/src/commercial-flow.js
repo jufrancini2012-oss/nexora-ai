@@ -15,6 +15,9 @@ export function buildOffer(product, overrides = {}) {
   if (!product?.id) throw new Error('PRODUCT_REQUIRED');
   const price = Number(overrides.price ?? product.price ?? 0);
   if (!Number.isFinite(price) || price <= 0) throw new Error('VALID_PRICE_REQUIRED');
+  if (product.margin === null || product.margin === undefined || product.margin === '' || product.score === null || product.score === undefined || product.score === '') {
+    throw new Error('VERIFIED_COMMERCIAL_DATA_REQUIRED');
+  }
   const margin = Number(product.margin);
   const score = Number(product.score);
   if (!Number.isFinite(margin) || !Number.isFinite(score)) throw new Error('VERIFIED_COMMERCIAL_DATA_REQUIRED');
