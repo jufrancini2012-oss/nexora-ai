@@ -1,13 +1,7 @@
 import { createPayment, webhook, processWebhook, payout, snapshot, reset as resetGateway } from './gateway-sandbox.js';
 import { createAsaasClient, validateAsaasWebhook } from './asaas-sandbox.js';
 import { selectCommercialProducts, buildOffer, createOrder, metricsFromGateway } from './commercial-flow.js';
-
-const products = [
-  { id:'p1', name:'Kit organização doméstica', category:'Casa', score:86, margin:0.34, price:89.90, status:'candidate' },
-  { id:'p2', name:'Acessórios para treino em casa', category:'Fitness', score:82, margin:0.29, price:79.90, status:'candidate' },
-  { id:'p3', name:'Curso de produtividade pessoal', category:'Educação', score:78, margin:0.62, price:49.90, status:'observe' },
-  { id:'p4', name:'Suplemento de procedência incerta', category:'Saúde', score:91, margin:0.28, price:99.90, status:'blocked' }
-];
+import { fetchMercadoLivreTrends, trendScores } from './mercadolivre-trends.js';
 
 const policy = {
   autonomyEnabled: true,
@@ -29,10 +23,61 @@ function cors(r){
   r.headers.set('access-control-allow-methods','GET,POST,OPTIONS');
   return r;
 }
-function chooseProducts(){ return selectCommercialProducts(products, policy); }
-function findProduct(id){ return chooseProducts().find((p) => p.id === id); }
-function commercialPlan(){
-  return chooseProducts().map((product) => ({opportunity: product, offer: buildOffer(product)}));
+
+async function loadOpportunities(env){
+  if(!env?.DB) return [];
+  const result = await env.DB.prepare('SELECT * FROM commercial_opportunities ORDER BY score DESC, observed_at DESC').all();
+  return (result.results || []).map((row) => ({
+    id: row.id,
+    name: row.name,
+    category: row.category,
+    score: Number(row.score || 0),
+    margin: row.margin == null ? null : Number(row.margin),
+    price: row.price == null ? null : Number(row.price),
+    status: row.status,
+    source: row.source,
+    sourceUrl: row.source_url,
+    signals: {
+      demand: Number(row.demand_score || 0),
+      acceptance: Number(row.acceptance_score || 0),
+      conversion: Number(row.conversion_score || 0),
+      economics: Number(row.economics_score || 0),
+      competition: Number(row.competition_score || 0),
+      operations: Number(row.operations_score || 0)
+    },
+    observedAt: row.observed_at,
+    raw: row.raw_json ? JSON.parse(row.raw_json) : null
+  }));
+}
+
+async function chooseProducts(env){
+  return selectCommercialProducts(await loadOpportunities(env), policy);
+}
+async function findProduct(env,id){
+  return (await chooseProducts(env)).find((p) => p.id === id);
+}
+async function commercialPlan(env){
+  return (await chooseProducts(env)).map((product) => ({opportunity: product, offer: buildOffer(product)}));
+}
+
+async function persistTrendOpportunities(env, trends){
+  if(!env?.DB) throw new Error('D1_NOT_CONFIGURED');
+  const observedAt = new Date().toISOString();
+  for(const trend of trends){
+    const scores = trendScores(trend.rank);
+    const id = `mli-${trend.name.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,70)}-${trend.rank}`;
+    await env.DB.prepare(`INSERT INTO commercial_opportunities
+      (id,name,category,score,margin,price,status,source,source_url,demand_score,acceptance_score,conversion_score,economics_score,competition_score,operations_score,observed_at,raw_json)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+      ON CONFLICT(source,name) DO UPDATE SET
+        score=excluded.score, source_url=excluded.source_url, demand_score=excluded.demand_score,
+        observed_at=excluded.observed_at, raw_json=excluded.raw_json`).bind(
+      id, trend.name, 'não classificada', scores.score, null, null, scores.status, trend.source, trend.sourceUrl,
+      scores.demandScore, scores.acceptanceScore, scores.conversionScore, scores.economicsScore,
+      scores.competitionScore, scores.operationsScore, observedAt, JSON.stringify(trend.raw)
+    ).run();
+  }
+  return observedAt;
 }
 
 async function loadOrders(env){
@@ -85,29 +130,46 @@ async function route(request, env){
     const gateway = snapshot();
     const metrics = metricsFromGateway(gateway);
     const persistedOrders = await loadOrders(env);
+    const opportunities = await loadOpportunities(env);
+    const selected = await chooseProducts(env);
     return json({
       autonomy: {enabled:policy.autonomyEnabled, mode:'balanced', minScore:policy.minScore},
       kpis:{salesToday:metrics.sales, revenueToday:metrics.revenue, leadsToday:persistedOrders.length, conversionRate:persistedOrders.length ? Number((metrics.sales/persistedOrders.length).toFixed(4)) : 0, netProfitToday:0},
-      pipeline:{researched:products.length, candidates:chooseProducts().length, selected:chooseProducts().length, activeTests:chooseProducts().length},
-      products:chooseProducts()
+      pipeline:{researched:opportunities.length, candidates:opportunities.filter((p)=>p.score>=65).length, selected:selected.length, activeTests:selected.length},
+      products:selected,
+      dataSources:[...new Set(opportunities.map((p)=>p.source))]
     });
   }
 
-  if(path==='/api/products') return json({products, selected:chooseProducts()});
-  if(path==='/api/autonomy') return json({policy, selected:chooseProducts()});
+  if(path==='/api/products') {
+    const opportunities = await loadOpportunities(env);
+    return json({products:opportunities, selected:await chooseProducts(env), source:'d1'});
+  }
+  if(path==='/api/autonomy') return json({policy, selected:await chooseProducts(env)});
   if(path==='/api/finance') {
     const gateway = snapshot(); const metrics = metricsFromGateway(gateway);
     return json({currency:'BRL', sandbox:true, available:metrics.revenue, pending:gateway.payments.filter(p=>p.status==='pending').reduce((s,p)=>s+Number(p.amount||0),0), paidToday:metrics.revenue, payouts:gateway.payouts});
   }
 
-  if(path==='/api/commercial/plan' && request.method==='GET') return json({ok:true,mode:'sandbox',autonomy:policy.autonomyEnabled,opportunities:commercialPlan()});
+  if(path==='/api/research/mercadolivre' && request.method==='POST') {
+    try {
+      const trends = await fetchMercadoLivreTrends(env?.MELI_ACCESS_TOKEN);
+      const observedAt = await persistTrendOpportunities(env, trends);
+      return json({ok:true,source:'mercadolivre_trends',count:trends.length,observedAt},200);
+    } catch(e) {
+      const status = e.message==='MELI_ACCESS_TOKEN_NOT_CONFIGURED' || e.message==='D1_NOT_CONFIGURED' ? 503 : 502;
+      return json({ok:false,error:e.message},status);
+    }
+  }
+
+  if(path==='/api/commercial/plan' && request.method==='GET') return json({ok:true,mode:'sandbox',autonomy:policy.autonomyEnabled,opportunities:await commercialPlan(env)});
 
   if(path==='/api/commercial/checkout' && request.method==='POST') {
     const body=await request.json().catch(()=>({}));
     try {
       const existing=await findOrderByIdempotency(env, body.idempotencyKey);
       if(existing) return json({ok:true,mode:'sandbox',idempotent:true,order:existing,offer:existing.offer},200);
-      const product=findProduct(body.productId);
+      const product=await findProduct(env, body.productId);
       if(!product) return json({ok:false,error:'PRODUCT_NOT_ELIGIBLE'},422);
       const offer=buildOffer(product);
       const order=createOrder({offer,customer:body.customer,idempotencyKey:body.idempotencyKey});
