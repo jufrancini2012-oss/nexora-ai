@@ -8,7 +8,7 @@ const post=(path,body)=>req(path,{method:'POST',headers:{'content-type':'applica
 
 const policy={autonomyEnabled:true,minScore:80,minMargin:0.25,maxNewTestsPerDay:3};
 const eligibleProducts=[
-  {id:'test-opportunity-1',name:'Oportunidade de teste 1',score:91,margin:0.42,status:'HIGH_PRIORITY',price:197},
+  {id:'test-opportunity-1',name:'Oportunidade de teste 1',score:91,margin:0.42,status:'HIGH_PRIORITY',price:197,source:'test-source',sourceUrl:'https://example.test/source',signals:{demand:24,acceptance:14,conversion:14,economics:19,competition:12,operations:8}},
   {id:'test-opportunity-2',name:'Oportunidade de teste 2',score:84,margin:0.31,status:'HIGH_PRIORITY',price:89},
   {id:'test-opportunity-3',name:'Oportunidade abaixo do limite',score:70,margin:0.35,status:'CANDIDATE',price:59}
 ];
@@ -20,12 +20,16 @@ test('commercial selection uses supplied opportunities and only selects eligible
   assert.ok(selected.every(x=>x.score>=80 && x.margin>=0.25));
 });
 
-test('commercial flow builds an offer and creates an order without sample products',()=>{
+test('commercial flow builds a verified offer and creates an order without sample products',()=>{
   const product=eligibleProducts[0];
   const offer=buildOffer(product);
   assert.equal(offer.productId,product.id);
   assert.equal(offer.price,197);
   assert.equal(offer.currency,'BRL');
+  assert.equal(offer.evidence.score,91);
+  assert.equal(offer.evidence.margin,0.42);
+  assert.equal(offer.evidence.source,'test-source');
+  assert.equal(offer.status,'active');
 
   const order=createOrder({
     offer,
@@ -36,6 +40,12 @@ test('commercial flow builds an offer and creates an order without sample produc
   assert.equal(order.productId,product.id);
   assert.equal(order.amount,197);
   assert.equal(order.status,'created');
+});
+
+test('commercial offer refuses incomplete or ineligible opportunities',()=>{
+  assert.throws(()=>buildOffer({...eligibleProducts[0],margin:null}),/VERIFIED_COMMERCIAL_DATA_REQUIRED/);
+  assert.throws(()=>buildOffer({...eligibleProducts[0],score:79}),/PRODUCT_NOT_READY_FOR_OFFER/);
+  assert.throws(()=>buildOffer({...eligibleProducts[0],margin:0.24}),/PRODUCT_NOT_READY_FOR_OFFER/);
 });
 
 test('commercial checkout rejects products that are not present in real D1 opportunities',async()=>{
