@@ -1,0 +1,51 @@
+{
+  "portfolio_version": "v1",
+  "currency": "BRL",
+  "products": [
+    {
+      "name": "Sony PlayStation Store Gift Card R$150 (Digital)",
+      "source": "mercado_livre_affiliate",
+      "affiliate_url": "https://meli.la/1ouWP7a",
+      "commission_rate": 0.05,
+      "priority": "medium"
+    },
+    {
+      "name": "Luva Nitrílica Preta Descarpack 100un — M",
+      "source": "mercado_livre_affiliate",
+      "affiliate_url": "https://meli.la/1xeoo34",
+      "commission_rate": 0.12,
+      "priority": "high"
+    },
+    {
+      "name": "Máscara Cirúrgica Descartável Tripla Branca 50 Unidades",
+      "source": "mercado_livre_affiliate",
+      "affiliate_url": "https://meli.la/31ycW67",
+      "commission_rate": 0.12,
+      "priority": "high"
+    },
+    {
+      "name": "Kit de maquiagem",
+      "source": "mercado_livre_affiliate",
+      "affiliate_url": "https://meli.la/1NGVTMj",
+      "commission_rate": 0.24,
+      "priority": "very_high"
+    },
+    {
+      "name": "Escova Secadora Mondial Chrome Pink 1200W ES-04",
+      "source": "mercado_livre_affiliate",
+      "affiliate_url": "https://meli.la/2teUgeG",
+      "commission_rate": 0.16,
+      "priority": "very_high"
+    }
+  ],
+  "optimization": {
+    "ranking_metrics": ["clicks", "purchases", "conversion_rate", "net_commission", "roi"],
+    "minimum_data_before_major_reallocation": {
+      "clicks": 100,
+      "purchases": 3
+    },
+    "daily_net_revenue_reinvestment_threshold_brl": 1000,
+    "reinvestment_rate_above_threshold": 0.10,
+    "reinvestment_basis": "net_revenue"
+  }
+}
