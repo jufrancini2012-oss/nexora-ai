@@ -23,30 +23,6 @@ jobs:
         working-directory: apps/api
         run: npm test
 
-      - name: Sincronizar ID atual do D1
-        working-directory: apps/api
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: |
-          DB_INFO="$(npx --yes wrangler@4 d1 list --json)"
-          DB_ID="$(printf '%s' "$DB_INFO" | node -e '
-            let input = "";
-            process.stdin.on("data", (chunk) => input += chunk);
-            process.stdin.on("end", () => {
-              const data = JSON.parse(input);
-              const list = Array.isArray(data) ? data : (data.result || []);
-              const db = list.find((item) => item.name === "nexora-ai");
-              if (!db?.uuid) process.exit(1);
-              process.stdout.write(db.uuid);
-            });
-          ')"
-          if [ -z "$DB_ID" ]; then
-            echo "Não foi possível localizar o ID atual do D1 nexora-ai pelo Wrangler."
-            exit 1
-          fi
-          echo "D1 nexora-ai localizado; sincronizando o identificador no Wrangler."
-          sed -i -E "s/^database_id = \"[^\"]+\"/database_id = \"$DB_ID\"/" wrangler.toml
-
       - name: Aplicar migrações D1
         working-directory: apps/api
         env:
