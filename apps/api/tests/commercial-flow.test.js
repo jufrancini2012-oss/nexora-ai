@@ -20,6 +20,28 @@ test('commercial selection uses supplied opportunities and only selects eligible
   assert.ok(selected.every(x=>x.score>=80 && x.margin>=0.25));
 });
 
+test('commercial selection uses verified learning to reorder and demote weak outcomes',()=>{
+  const products=[
+    {...eligibleProducts[0], outcome:{conversionRate:0.20,refundRate:0.10,chargebackRate:0}},
+    {...eligibleProducts[1]}
+  ];
+  const selected=selectCommercialProducts(products,policy);
+  assert.equal(selected.length,2);
+  assert.deepEqual(selected.map(x=>x.id),['test-opportunity-2','test-opportunity-1']);
+  assert.equal(selected[0].learning.learnedScore,84);
+  assert.equal(selected[1].learning.learnedScore,83);
+});
+
+test('commercial selection excludes an eligible base score when verified learning lowers it below the threshold',()=>{
+  const products=[
+    {...eligibleProducts[0], outcome:{conversionRate:0.01,refundRate:0.10,chargebackRate:0.03}},
+    {...eligibleProducts[1]}
+  ];
+  const selected=selectCommercialProducts(products,policy);
+  assert.deepEqual(selected.map(x=>x.id),['test-opportunity-2']);
+  assert.equal(selected[0].learning.learnedScore,84);
+});
+
 test('commercial flow builds a verified offer and creates an order without sample products',()=>{
   const product=eligibleProducts[0];
   const offer=buildOffer(product);
@@ -40,6 +62,14 @@ test('commercial flow builds a verified offer and creates an order without sampl
   assert.equal(order.productId,product.id);
   assert.equal(order.amount,197);
   assert.equal(order.status,'created');
+});
+
+test('commercial flow preserves learning evidence in the offer',()=>{
+  const product={...eligibleProducts[0],outcome:{conversionRate:0.20,refundRate:0,chargebackRate:0}};
+  const selected=selectCommercialProducts([product],policy)[0];
+  const offer=buildOffer(selected);
+  assert.equal(offer.learning.learnedScore,99);
+  assert.equal(offer.evidence.score,91);
 });
 
 test('commercial offer refuses incomplete or ineligible opportunities',()=>{
