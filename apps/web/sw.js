@@ -1,4 +1,4 @@
-const C='rva-v2';
+const C='rva-v3';
 const ASSETS=['./','./index.html','./styles.css','./app.js','./manifest.webmanifest','./api-client.js','./autonomous-dashboard.js'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(C).then(cache=>cache.addAll(ASSETS)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',event=>event.waitUntil(self.clients.claim()));
