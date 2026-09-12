@@ -1,7 +1,7 @@
 name = "nexora-ai"
-main = "src/worker.js"
+main = "src/autonomous-worker.js"
 compatibility_date = "2026-09-05"
-account_id = "98cf18038e390ed6ff7684d12f4f6f2e"
+account_id = "98cf18038e390ed6ff7684d12f4f6e2"
 
 [assets]
 directory = "../web"
@@ -13,6 +13,9 @@ binding = "DB"
 database_name = "nexora-ai"
 database_id = "9fa5753d-1fec-40e6-b086-31387583bc1e"
 migrations_dir = "../../database/migrations"
+
+[triggers]
+crons = ["*/15 * * * *"]
 
 [vars]
 APP_MODE = "autonomo"
