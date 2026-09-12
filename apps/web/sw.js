@@ -1,12 +1,12 @@
-const C='rva-v3';
-const ASSETS=['./','./index.html','./styles.css','./app.js','./manifest.webmanifest','./api-client.js','./autonomous-dashboard.js'];
+const C='rva-v4';
+const ASSETS=['./','./index.html','./styles.css','./app.js?v=4','./manifest.webmanifest','./api-client.js?v=4','./autonomous-dashboard.js?v=4'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(C).then(cache=>cache.addAll(ASSETS)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',event=>event.waitUntil(self.clients.claim()));
 self.addEventListener('fetch',event=>event.respondWith(caches.match(event.request).then(r=>r||fetch(event.request))));
 self.addEventListener('push',event=>{
   if(!event.data) return;
-  let data={}; try{data=event.data.json()}catch{data={title:'Robo Vendas AI',body:event.data.text()}};
-  event.waitUntil(self.registration.showNotification(data.title||'Robo Vendas AI',{body:data.body||'',icon:data.icon||'./icon-192.png',badge:data.badge||'./icon-192.png',tag:data.tag||'rva-event',data:data.data||{}}));
+  let data={}; try{data=event.data.json()}catch{data={title:'NEXORA AI',body:event.data.text()}};
+  event.waitUntil(self.registration.showNotification(data.title||'NEXORA AI',{body:data.body||'',icon:data.icon||'./icon-192.png',badge:data.badge||'./icon-192.png',tag:data.tag||'nexora-event',data:data.data||{}}));
 });
 self.addEventListener('notificationclick',event=>{
   event.notification.close();
