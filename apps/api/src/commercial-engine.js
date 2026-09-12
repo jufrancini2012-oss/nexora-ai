@@ -161,13 +161,21 @@ export function decideProductAction(product = {}, metrics = {}, options = {}) {
 /**
  * Returns a daily capital-allocation decision based on verified net revenue.
  * The reinvestment threshold is deliberately based on net, never gross, revenue.
+ * The reserve is split between promotion, AI/automation and core infrastructure.
  */
 export function calculateReinvestment(netDailyRevenue, options = {}) {
   const revenue = nonNegative(netDailyRevenue);
   const threshold = nonNegative(options.threshold ?? 1000);
   const rate = Math.min(1, Math.max(0, Number(options.rate ?? 0.10)));
+  const allocation = options.allocation ?? {
+    productPromotion: 0.40,
+    aiAndAutomation: 0.25,
+    cloudInfrastructure: 0.20,
+    githubDevelopment: 0.15
+  };
   const eligible = revenue > threshold;
   const reinvestment = eligible ? Number((revenue * rate).toFixed(2)) : 0;
+  const allocate = (share) => Number((reinvestment * Number(share || 0)).toFixed(2));
 
   return {
     netDailyRevenue: revenue,
@@ -175,6 +183,12 @@ export function calculateReinvestment(netDailyRevenue, options = {}) {
     rate,
     eligible,
     reinvestment,
+    allocation: {
+      productPromotion: allocate(allocation.productPromotion),
+      aiAndAutomation: allocate(allocation.aiAndAutomation),
+      cloudInfrastructure: allocate(allocation.cloudInfrastructure),
+      githubDevelopment: allocate(allocation.githubDevelopment)
+    },
     retained: Number((revenue - reinvestment).toFixed(2)),
     basis: "net_revenue"
   };
