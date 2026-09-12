@@ -45,11 +45,11 @@ test('sandbox payment webhook confirms a sale and updates commercial state', asy
   const state = await json(stateResponse);
   assert.equal(state.ok, true);
   assert.equal(state.mode, 'sandbox');
+  assert.equal(state.gateway.sales.length, 1);
   assert.equal(state.metrics.sales, 1);
   assert.equal(state.metrics.revenue, 197);
-  assert.equal(state.sales.length, 1);
-  assert.equal(state.sales[0].paymentId, created.payment.id);
-  assert.equal(state.sales[0].status, 'paid');
+  assert.equal(state.gateway.sales[0].paymentId, created.payment.id);
+  assert.equal(state.gateway.sales[0].status, 'paid');
 });
 
 test('sandbox payment webhook is idempotent and does not duplicate a sale', async () => {
@@ -86,7 +86,7 @@ test('sandbox payment webhook is idempotent and does not duplicate a sale', asyn
   assert.equal(secondData.duplicate, true);
 
   const state = await json(await worker.fetch(req('/api/commercial/state')));
-  assert.equal(state.sales.length, 1);
+  assert.equal(state.gateway.sales.length, 1);
   assert.equal(state.metrics.sales, 1);
   assert.equal(state.metrics.revenue, 89);
 });
@@ -125,8 +125,8 @@ test('refund reverses the sandbox sale in the gateway ledger', async () => {
   assert.equal(refund.ok, true);
 
   const state = await json(await worker.fetch(req('/api/commercial/state')));
-  assert.equal(state.sales.length, 1);
-  assert.equal(state.sales[0].status, 'refunded');
+  assert.equal(state.gateway.sales.length, 1);
+  assert.equal(state.gateway.sales[0].status, 'refunded');
   assert.equal(state.metrics.sales, 0);
   assert.equal(state.metrics.revenue, 0);
 });
