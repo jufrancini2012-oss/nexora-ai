@@ -15,6 +15,19 @@ function xmlEscape(value = '') {
   return String(value).replace(/[&<>\"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;' }[c]));
 }
 
+async function loadDistribution(env) {
+  if (!env?.DB) return { stats: { published: 0, publishedToday: 0, events: 0, clicks: 0 }, items: [] };
+  const [content, clicks, items] = await Promise.all([
+    loadContentStats(env),
+    env.DB.prepare("SELECT COUNT(*) AS count FROM affiliate_clicks WHERE source='organic'").first(),
+    env.DB.prepare("SELECT slug,title,created_at FROM content_items WHERE status='published' ORDER BY created_at DESC LIMIT 5").all()
+  ]);
+  return {
+    stats: { ...content, clicks: Number(clicks?.count || 0) },
+    items: (items.results || []).map((item) => ({ ...item }))
+  };
+}
+
 async function handleOrganicFeed(request, env) {
   if (request.method !== 'GET' || new URL(request.url).pathname !== '/feed.xml') return null;
   const url = new URL(request.url);
@@ -40,6 +53,10 @@ export default {
     }
     if (url.pathname === '/api/content/stats' && request.method === 'GET') {
       try { return json({ ok: true, stats: await loadContentStats(env) }); }
+      catch (error) { return json({ ok: false, error: error.message }, 500); }
+    }
+    if (url.pathname === '/api/distribution' && request.method === 'GET') {
+      try { return json({ ok: true, distribution: await loadDistribution(env) }); }
       catch (error) { return json({ ok: false, error: error.message }, 500); }
     }
     if (url.pathname === '/api/commercial-brain' && request.method === 'GET') {
