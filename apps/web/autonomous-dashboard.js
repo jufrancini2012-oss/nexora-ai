@@ -8,16 +8,24 @@
     if(!window.RoboAPI?.dashboard) throw new Error('API_CLIENT_UNAVAILABLE');
     const controller=new AbortController();
     const timer=setTimeout(()=>controller.abort(),10000);
-    const response=await fetch((window.ROBO_API_BASE||'')+'/api/dashboard',{signal:controller.signal,cache:'no-store'});
+    const base=window.ROBO_API_BASE||'';
+    const [dashboardResponse,statsResponse]=await Promise.all([
+      fetch(base+'/api/dashboard',{signal:controller.signal,cache:'no-store'}),
+      fetch(base+'/api/affiliate/stats',{signal:controller.signal,cache:'no-store'})
+    ]);
     clearTimeout(timer);
-    if(!response.ok) throw new Error(`HTTP_${response.status}`);
-    const d=await response.json();
+    if(!dashboardResponse.ok) throw new Error(`HTTP_${dashboardResponse.status}`);
+    const d=await dashboardResponse.json();
+    const stats=statsResponse.ok?(await statsResponse.json())?.stats||{}:{};
     const pipeline=d?.pipeline||{};
     const kpis=d?.kpis||{};
     const products=Array.isArray(d?.products)?d.products:[];
     const selected=Array.isArray(d?.selectedProducts)?d.selectedProducts:[];
     const hasSelected=selected.length>0;
-    root.innerHTML=`<h2>Central autônoma</h2><div class="live-grid"><div><b>${Number(pipeline.researched||0)}</b><span>oportunidades pesquisadas</span></div><div><b>${Number(pipeline.catalog||products.length||0)}</b><span>produtos cadastrados</span></div><div><b>${Number(pipeline.selected||0)}</b><span>produtos prontos para teste</span></div><div><b>R$ ${Number(kpis.revenueToday||0).toFixed(2).replace('.',',')}</b><span>vendas hoje</span></div></div><h3>${hasSelected?'Produtos priorizados pelo robô':'Catálogo afiliado em avaliação'}</h3>${products.length?products.map(p=>{const url=p.id?`/go?product=${encodeURIComponent(p.id)}&source=dashboard`:(p.affiliateUrl||'');const cta=url?`<a class="btn" href="${String(url)}" target="_blank" rel="noopener noreferrer">Comprar / ver oferta</a>`:'<span class="note">Link de venda ainda não disponível</span>';return `<article class="product-card"><strong>${String(p.name||'Produto')}</strong><span>${String(p.providerName||p.provider||p.category||'')}</span><span>${money(p.price)} · ${pct(p.commissionRate)}</span><em>${p.score==null?'Aguardando evidência':'Score '+Number(p.score||0)}</em>${cta}</article>`;}).join(''):'<p class="note">Nenhum produto cadastrado no catálogo ainda.</p>'}<p class="note">O clique é registrado pelo NEXORA antes de encaminhar para o parceiro. A compra acontece no Mercado Livre, e a receita do NEXORA só é reconhecida quando a comissão for confirmada pelo programa de afiliados.</p>`;
+    const clicksToday=Number(stats?.today?.clicks||0);
+    const totalClicks=Number(stats?.total?.clicks||0);
+    const clickMap=new Map((stats?.products||[]).map(p=>[p.id,Number(p.clicks||0)]));
+    root.innerHTML=`<h2>Central autônoma</h2><div class="live-grid"><div><b>${Number(pipeline.researched||0)}</b><span>oportunidades pesquisadas</span></div><div><b>${Number(pipeline.catalog||products.length||0)}</b><span>produtos cadastrados</span></div><div><b>${clicksToday}</b><span>cliques hoje</span></div><div><b>${totalClicks}</b><span>cliques acumulados</span></div></div><h3>${hasSelected?'Produtos priorizados pelo robô':'Catálogo afiliado em avaliação'}</h3>${products.length?products.map(p=>{const url=p.id?`/go?product=${encodeURIComponent(p.id)}&source=dashboard`:(p.affiliateUrl||'');const cta=url?`<a class="btn" href="${String(url)}" target="_blank" rel="noopener noreferrer">Comprar / ver oferta</a>`:'<span class="note">Link de venda ainda não disponível</span>';const clicks=clickMap.get(p.id)||0;return `<article class="product-card"><strong>${String(p.name||'Produto')}</strong><span>${String(p.providerName||p.provider||p.category||'')}</span><span>${money(p.price)} · ${pct(p.commissionRate)}</span><em>${p.score==null?'Aguardando evidência':'Score '+Number(p.score||0)}</em><span>${clicks} clique${clicks===1?'':'s'}</span>${cta}</article>`;}).join(''):'<p class="note">Nenhum produto cadastrado no catálogo ainda.</p>'}<p class="note">O clique é registrado pelo NEXORA antes de encaminhar para o parceiro. A compra acontece no Mercado Livre, e a receita do NEXORA só é reconhecida quando a comissão for confirmada pelo programa de afiliados.</p>`;
   }catch(e){
     const message=e?.name==='AbortError'?'A API demorou mais de 10 segundos para responder.':'Não foi possível carregar os dados da Central autônoma agora.';
     showError(message);
