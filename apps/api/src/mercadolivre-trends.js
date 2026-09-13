@@ -44,10 +44,11 @@ export async function searchMercadoLivreProducts(keyword, accessToken, limit = 5
     const demand = Math.min(100, Math.round(Math.log10(sold + 1) * 28));
     const acceptance = Math.min(100, Math.round(45 + (shippingFree * 15) + (official * 10)));
     const economics = price == null ? 35 : Math.max(20, Math.min(100, Math.round(100 - Math.abs(Math.log10(Math.max(price, 1)) - 2.3) * 35)));
+    const conversion = Math.min(100, sold > 0 ? 40 + Math.round(Math.log10(sold + 1) * 15) : 40);
     const score = scoreOpportunity({
       demandScore: demand,
       acceptanceScore: acceptance,
-      conversionScore: Math.min(100, 40 + sold > 0 ? Math.round(Math.log10(sold + 1) * 15) : 40),
+      conversionScore: conversion,
       economicsScore: economics,
       competitionScore: Math.max(20, 80 - (index * 8)),
       operationsScore: 75,
