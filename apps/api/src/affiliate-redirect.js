@@ -4,8 +4,11 @@ export async function handleAffiliateRedirect(request, env) {
   if (url.pathname !== '/go') return null;
 
   const productId = url.searchParams.get('product');
-  const source = url.searchParams.get('source') || 'dashboard';
-  const campaign = url.searchParams.get('campaign') || null;
+  const source = (url.searchParams.get('source') || 'dashboard').slice(0, 80);
+  const campaign = (url.searchParams.get('campaign') || url.searchParams.get('utm_campaign') || null)?.slice(0, 120) || null;
+  const medium = (url.searchParams.get('utm_medium') || null)?.slice(0, 80) || null;
+  const content = (url.searchParams.get('utm_content') || null)?.slice(0, 120) || null;
+  const term = (url.searchParams.get('utm_term') || null)?.slice(0, 120) || null;
   if (!productId || !env?.DB) {
     return new Response('Oferta indisponível', { status: 404 });
   }
@@ -27,7 +30,14 @@ export async function handleAffiliateRedirect(request, env) {
     new Date().toISOString(),
     source,
     campaign,
-    JSON.stringify({ provider: row.provider, userAgent: request.headers.get('user-agent') || null })
+    JSON.stringify({
+      provider: row.provider,
+      medium,
+      content,
+      term,
+      referrer: request.headers.get('referer') || null,
+      userAgent: request.headers.get('user-agent') || null
+    })
   ).run();
 
   return Response.redirect(row.affiliate_url, 302);
