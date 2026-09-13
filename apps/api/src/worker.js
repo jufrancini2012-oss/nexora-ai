@@ -7,6 +7,7 @@ const policy = {
   autonomyEnabled: true,
   minScore: 80,
   minMargin: 0.25,
+  minAffiliateCommission: 0.10,
   maxNewTestsPerDay: 3,
   blockedCategories: ['alto risco regulatório'],
   prohibitedActions: ['transfer_money','change_bank_account','change_payout_destination','bypass_payment','forge_payment','manipulate_metrics','make_deceptive_claims']
@@ -66,7 +67,11 @@ async function loadAffiliateCatalog(env){
       affiliateUrl: row.affiliate_url || null,
       score: row.score == null ? null : Number(row.score),
       status: row.status || 'candidate',
-      evidence: row.evidence_json ? JSON.parse(row.evidence_json) : null
+      evidence: row.evidence_json ? JSON.parse(row.evidence_json) : null,
+      commercialType: 'affiliate',
+      source: 'affiliate_catalog',
+      sourceUrl: row.affiliate_url || null,
+      margin: row.commission_rate == null ? null : Number(row.commission_rate)
     }));
   } catch {
     return [];
@@ -74,7 +79,11 @@ async function loadAffiliateCatalog(env){
 }
 
 async function chooseProducts(env){
-  return selectCommercialProducts(await loadOpportunities(env), policy);
+  const [opportunities, affiliateCatalog] = await Promise.all([
+    loadOpportunities(env),
+    loadAffiliateCatalog(env)
+  ]);
+  return selectCommercialProducts([...affiliateCatalog, ...opportunities], policy);
 }
 async function findProduct(env,id){
   return (await chooseProducts(env)).find((p) => p.id === id);
