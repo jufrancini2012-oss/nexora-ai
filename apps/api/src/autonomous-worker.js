@@ -4,6 +4,7 @@ import { handleAffiliateRedirect } from './affiliate-redirect.js';
 import { loadAffiliateStats } from './affiliate-stats.js';
 import { loadContentStats, getContent } from './content-engine.js';
 import { loadCommercialBrain } from './commercial-brain.js';
+import { loadEffortAllocation } from './effort-allocation.js';
 import { handleOrganicContent, handleOrganicRobots, handleOrganicSitemap } from './organic-content.js';
 
 function json(data, status = 200) {
@@ -23,6 +24,10 @@ export default {
     }
     if (url.pathname === '/api/commercial-brain' && request.method === 'GET') {
       try { return json({ ok: true, brain: await loadCommercialBrain(env) }); }
+      catch (error) { return json({ ok: false, error: error.message }, 500); }
+    }
+    if (url.pathname === '/api/effort-allocation' && request.method === 'GET') {
+      try { return json({ ok: true, allocation: await loadEffortAllocation(env) }); }
       catch (error) { return json({ ok: false, error: error.message }, 500); }
     }
     if (url.pathname === '/api/content' && request.method === 'GET') {
