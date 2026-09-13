@@ -20,18 +20,25 @@ function articleForProduct(product) {
   };
 }
 
-async function candidates(env) {
+async function candidates(env, priorityProductIds = []) {
   const catalog = await env.DB.prepare(`SELECT id, name, price, commission_rate AS commissionRate, score, status FROM affiliate_products WHERE status != 'blocked' ORDER BY COALESCE(score,0) DESC, COALESCE(commission_rate,0) DESC, name ASC`).all();
-  return catalog.results || [];
+  const rows = catalog.results || [];
+  const priority = new Map(priorityProductIds.map((id, index) => [id, index]));
+  return rows.sort((a,b) => {
+    const ai = priority.has(a.id) ? priority.get(a.id) : 9999;
+    const bi = priority.has(b.id) ? priority.get(b.id) : 9999;
+    if (ai !== bi) return ai - bi;
+    return Number(b.score || 0) - Number(a.score || 0) || Number(b.commissionRate || 0) - Number(a.commissionRate || 0);
+  });
 }
 
-export async function generateAutonomousContent(env, { max = MAX_DAILY_PUBLICATIONS } = {}) {
+export async function generateAutonomousContent(env, { max = MAX_DAILY_PUBLICATIONS, priorityProductIds = [] } = {}) {
   if (!env?.DB) return { created: 0, skipped: 0, reason: 'D1_NOT_CONFIGURED' };
   const today = new Date().toISOString().slice(0, 10);
   const publishedToday = await env.DB.prepare(`SELECT COUNT(*) AS count FROM content_items WHERE created_at >= ? AND created_at < ?`).bind(`${today}T00:00:00.000Z`, `${today}T23:59:59.999Z`).first();
   let remaining = Math.max(0, Math.min(MAX_DAILY_PUBLICATIONS, Number(max)) - Number(publishedToday?.count || 0));
   if (!remaining) return { created: 0, skipped: 0, reason: 'DAILY_LIMIT_REACHED' };
-  const products = await candidates(env);
+  const products = await candidates(env, priorityProductIds);
   let created = 0, skipped = 0;
   for (const product of products) {
     if (!remaining) break;
@@ -44,7 +51,7 @@ export async function generateAutonomousContent(env, { max = MAX_DAILY_PUBLICATI
     await env.DB.prepare(`INSERT INTO content_events (id,content_id,event_type,occurred_at,metadata_json) VALUES (?,?,?,?,?)`).bind(`event_${crypto.randomUUID()}`, id, 'published', now, JSON.stringify({ productId: product.id })).run();
     created += 1; remaining -= 1;
   }
-  return { created, skipped, remaining };
+  return { created, skipped, remaining, prioritized: priorityProductIds.slice(0, MAX_DAILY_PUBLICATIONS) };
 }
 
 export async function learnFromContentPerformance(env) {
