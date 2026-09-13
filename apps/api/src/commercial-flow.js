@@ -7,12 +7,18 @@ const DEFAULT_OFFER = {
 };
 
 export function selectCommercialProducts(products, policy) {
-  const eligible = products.filter((p) =>
-    policy.autonomyEnabled &&
-    p.score >= policy.minScore &&
-    p.margin >= policy.minMargin &&
-    p.status !== 'blocked'
-  );
+  const eligible = products.filter((p) => {
+    if (!policy.autonomyEnabled || p.status === 'blocked' || p.score < policy.minScore) return false;
+
+    // Afiliados não possuem "margem" operacional igual a um produto próprio.
+    // Para eles, a comissão é o critério econômico verificável de entrada.
+    if (p.commercialType === 'affiliate' || p.affiliateUrl) {
+      return Number(p.commissionRate) >= Number(policy.minAffiliateCommission ?? 0.10)
+        && Number(p.commissionRate) <= 1;
+    }
+
+    return p.margin != null && p.margin >= policy.minMargin;
+  });
 
   return rankWithLearning(eligible)
     .filter((p) => p.learning.learnedScore >= policy.minScore)
@@ -21,6 +27,43 @@ export function selectCommercialProducts(products, policy) {
 
 export function buildOffer(product, overrides = {}) {
   if (!product?.id) throw new Error('PRODUCT_REQUIRED');
+
+  // Oferta de afiliado: a conversão acontece no destino do parceiro, não no
+  // checkout sandbox do NEXORA. Preço pode permanecer desconhecido sem impedir
+  // a divulgação, desde que o link afiliado esteja presente.
+  if (product.commercialType === 'affiliate' || product.affiliateUrl) {
+    const affiliateUrl = overrides.affiliateUrl || product.affiliateUrl;
+    if (!affiliateUrl) throw new Error('AFFILIATE_URL_REQUIRED');
+    const score = Number(product.score);
+    const commissionRate = Number(product.commissionRate);
+    if (!Number.isFinite(score) || !Number.isFinite(commissionRate)) throw new Error('VERIFIED_AFFILIATE_DATA_REQUIRED');
+    if (score < 80 || commissionRate < 0.10 || product.status === 'blocked') throw new Error('PRODUCT_NOT_READY_FOR_AFFILIATE_OFFER');
+
+    return {
+      id: overrides.id || `offer_${product.id}`,
+      productId: product.id,
+      name: overrides.name || `Oferta ${product.name}`,
+      headline: overrides.headline || `${product.name}: confira a oferta disponível`,
+      description: overrides.description || `Oferta afiliada selecionada pelo NEXORA AI com base em evidências comerciais e comissão verificável.`,
+      price: product.price == null ? null : Number(product.price),
+      currency: overrides.currency || product.currency || DEFAULT_OFFER.currency,
+      checkout: 'affiliate_redirect',
+      checkoutPath: affiliateUrl,
+      affiliateUrl,
+      evidence: {
+        score,
+        margin: commissionRate,
+        commissionRate,
+        economicsType: 'affiliate_commission',
+        source: product.source || null,
+        sourceUrl: product.sourceUrl || null,
+        signals: product.signals || null
+      },
+      learning: product.learning || null,
+      status: 'active'
+    };
+  }
+
   const price = Number(overrides.price ?? product.price ?? 0);
   if (!Number.isFinite(price) || price <= 0) throw new Error('VALID_PRICE_REQUIRED');
   if (product.margin === null || product.margin === undefined || product.margin === '' || product.score === null || product.score === undefined || product.score === '') {
