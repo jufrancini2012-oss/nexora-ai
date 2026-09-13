@@ -11,17 +11,22 @@ function dedupeCommercialProducts(products = []) {
   const result = [];
 
   for (const product of products) {
-    const affiliateUrl = product.affiliateUrl || product.sourceUrl || '';
+    const affiliateUrl = product.affiliateUrl || '';
     const externalId = product.externalId || '';
     const normalizedName = String(product.name || '').trim().toLowerCase().replace(/\s+/g, ' ');
-    const key = affiliateUrl
-      ? `url:${affiliateUrl}`
-      : externalId
-        ? `external:${product.provider || ''}:${externalId}`
-        : `name:${normalizedName}`;
 
-    if (seen.has(key)) continue;
-    seen.add(key);
+    // A mesma oportunidade pode aparecer tanto na pesquisa geral quanto no
+    // catálogo de afiliados. Como o catálogo de afiliados vem primeiro no
+    // worker, usar o nome como identidade evita exibir/selecionar o mesmo
+    // produto duas vezes quando os URLs de origem são diferentes.
+    const keys = [
+      normalizedName ? `name:${normalizedName}` : null,
+      affiliateUrl ? `url:${affiliateUrl}` : null,
+      externalId ? `external:${product.provider || ''}:${externalId}` : null
+    ].filter(Boolean);
+
+    if (keys.some((key) => seen.has(key))) continue;
+    keys.forEach((key) => seen.add(key));
     result.push(product);
   }
 
