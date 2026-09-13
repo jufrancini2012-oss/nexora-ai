@@ -14,6 +14,56 @@ async function loadFallbackKeywords(env) {
   return (result.results || []).map((row) => String(row.name || '').trim()).filter(Boolean);
 }
 
+async function persistAffiliateCatalogOpportunities(env, observedAt) {
+  if (!env?.DB) return 0;
+  const result = await env.DB.prepare(`SELECT a.id,a.name,a.price,a.currency,a.commission_rate,a.commission_amount,
+      a.affiliate_url,a.status,a.evidence_json,
+      COALESCE((SELECT o.score FROM commercial_opportunities o
+        WHERE lower(o.name)=lower(a.name)
+        ORDER BY o.observed_at DESC LIMIT 1), a.score, 0) AS effective_score
+    FROM affiliate_products a
+    WHERE a.status != 'blocked'
+    ORDER BY effective_score DESC, COALESCE(a.commission_rate,0) DESC, a.name ASC`).all();
+
+  let count = 0;
+  for (const row of result.results || []) {
+    const commissionRate = row.commission_rate == null ? null : Number(row.commission_rate);
+    const score = Number(row.effective_score || 0);
+    const id = `affiliate-${row.id}`;
+    await env.DB.prepare(`INSERT INTO commercial_opportunities
+      (id,name,category,score,margin,price,status,source,source_url,demand_score,acceptance_score,conversion_score,economics_score,competition_score,operations_score,observed_at,raw_json)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+      ON CONFLICT(source,name) DO UPDATE SET score=excluded.score, margin=excluded.margin,
+      price=excluded.price, status=excluded.status, source_url=excluded.source_url,
+      economics_score=excluded.economics_score, observed_at=excluded.observed_at, raw_json=excluded.raw_json`)
+      .bind(
+        id,
+        row.name,
+        'afiliado',
+        score,
+        commissionRate,
+        row.price == null ? null : Number(row.price),
+        'candidate',
+        'affiliate_catalog',
+        row.affiliate_url || null,
+        0, 0, 0,
+        commissionRate == null ? 0 : Math.round(commissionRate * 100),
+        0, 0,
+        observedAt,
+        JSON.stringify({
+          source: 'affiliate_catalog',
+          commissionRate,
+          commissionAmount: row.commission_amount == null ? null : Number(row.commission_amount),
+          currency: row.currency || 'BRL',
+          affiliateUrl: row.affiliate_url || null,
+          evidence: row.evidence_json ? JSON.parse(row.evidence_json) : null
+        })
+      ).run();
+    count += 1;
+  }
+  return count;
+}
+
 async function persistProductCandidate(env, product, sourceKeyword, trendRank, observedAt) {
   const candidateId = `mli-item-${product.itemId}`;
   const trendScore = trendRank ? trendScores(trendRank).score : 60;
@@ -105,8 +155,11 @@ export async function runAutonomyCycle(env, options = {}) {
         }
       }
 
-      // Produtos afiliados já cadastrados também entram na seleção quando ainda
-      // não existem oportunidades suficientes vindas da pesquisa externa.
+      // Ponte econômica: transforma o catálogo afiliado cadastrado em
+      // oportunidades comerciais explícitas. A comissão é tratada como
+      // economia de afiliado, não como margem de produto próprio.
+      await persistAffiliateCatalogOpportunities(env, observedAt);
+
       selectedCount = Number((await env.DB.prepare(`SELECT COUNT(*) AS count FROM commercial_opportunities
         WHERE score >= 80 AND status IN (?,?)`).bind('observe','candidate').first())?.count || 0);
     }
