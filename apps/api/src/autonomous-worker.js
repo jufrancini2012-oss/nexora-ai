@@ -2,6 +2,7 @@ import app from './worker.js';
 import { runAutonomyCycle } from './autonomy-cycle.js';
 import { handleAffiliateRedirect } from './affiliate-redirect.js';
 import { loadAffiliateStats } from './affiliate-stats.js';
+import { handleOrganicContent, handleOrganicRobots, handleOrganicSitemap } from './organic-content.js';
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'access-control-allow-origin': '*' } });
@@ -17,6 +18,12 @@ export default {
         return json({ ok: false, error: error.message }, 500);
       }
     }
+    const robotsResponse = await handleOrganicRobots(request);
+    if (robotsResponse) return robotsResponse;
+    const sitemapResponse = await handleOrganicSitemap(request, env);
+    if (sitemapResponse) return sitemapResponse;
+    const organicResponse = await handleOrganicContent(request, env);
+    if (organicResponse) return organicResponse;
     const affiliateResponse = await handleAffiliateRedirect(request, env);
     if (affiliateResponse) return affiliateResponse;
     return app.fetch(request, env, ctx);
