@@ -5,16 +5,18 @@
   const money=(value)=>value==null?'Preço não informado':`R$ ${Number(value).toFixed(2).replace('.',',')}`;
   const pct=(value)=>value==null?'Comissão a confirmar':`${(Number(value)*100).toFixed(0)}% comissão`;
   const signalLabel=(signal)=>({verified_conversion:'Conversão verificada',content_ctr:'CTR do conteúdo',affiliate_clicks:'Cliques de afiliado',insufficient_evidence:'Pouca evidência'})[signal]||'Sinal em aprendizado';
+  const allocationLabel=(reason)=>({verified_conversion:'Conversão verificada',content_ctr:'Bom CTR',affiliate_clicks:'Cliques acumulados',commission:'Comissão atrativa',exploration:'Exploração controlada'})[reason]||'Prioridade comercial';
   try{
     if(!window.RoboAPI?.dashboard) throw new Error('API_CLIENT_UNAVAILABLE');
     const controller=new AbortController();
     const timer=setTimeout(()=>controller.abort(),10000);
     const base=window.ROBO_API_BASE||'';
-    const [dashboardResponse,statsResponse,contentResponse,brainResponse]=await Promise.all([
+    const [dashboardResponse,statsResponse,contentResponse,brainResponse,allocationResponse]=await Promise.all([
       fetch(base+'/api/dashboard',{signal:controller.signal,cache:'no-store'}),
       fetch(base+'/api/affiliate/stats',{signal:controller.signal,cache:'no-store'}),
       fetch(base+'/api/content/stats',{signal:controller.signal,cache:'no-store'}),
-      fetch(base+'/api/commercial-brain',{signal:controller.signal,cache:'no-store'})
+      fetch(base+'/api/commercial-brain',{signal:controller.signal,cache:'no-store'}),
+      fetch(base+'/api/effort-allocation',{signal:controller.signal,cache:'no-store'})
     ]);
     clearTimeout(timer);
     if(!dashboardResponse.ok) throw new Error(`HTTP_${dashboardResponse.status}`);
@@ -22,7 +24,9 @@
     const stats=statsResponse.ok?(await statsResponse.json())?.stats||{}:{};
     const content=contentResponse.ok?(await contentResponse.json())?.stats||{}:{};
     const brain=brainResponse.ok?(await brainResponse.json())?.brain||{}:{};
+    const allocation=allocationResponse.ok?(await allocationResponse.json())?.allocation||{}:{};
     const brainProducts=Array.isArray(brain?.products)?brain.products:[];
+    const slots=Array.isArray(allocation?.slots)?allocation.slots:[];
     const pipeline=d?.pipeline||{};
     const products=Array.isArray(d?.products)?d.products:[];
     const selected=Array.isArray(d?.selectedProducts)?d.selectedProducts:[];
@@ -30,7 +34,8 @@
     const totalClicks=Number(stats?.total?.clicks||0);
     const clickMap=new Map((stats?.products||[]).map(p=>[p.id,Number(p.clicks||0)]));
     const topBrain=brainProducts.slice(0,5);
-    root.innerHTML=`<h2>Central autônoma</h2><div class="live-grid"><div><b>${Number(pipeline.researched||0)}</b><span>oportunidades pesquisadas</span></div><div><b>${Number(pipeline.catalog||products.length||0)}</b><span>produtos cadastrados</span></div><div><b>${clicksToday}</b><span>cliques hoje</span></div><div><b>${totalClicks}</b><span>cliques acumulados</span></div><div><b>${Number(content.publishedToday||0)}</b><span>conteúdos publicados hoje</span></div><div><b>${Number(content.published||0)}</b><span>conteúdos publicados</span></div></div><h3>🧠 Cérebro comercial — prioridades</h3>${topBrain.length?topBrain.map((p,i)=>{const ctr=Number(p.ctr||0)*100;return `<article class="product-card"><strong>#${i+1} · ${String(p.name||'Produto')}</strong><span>Score ${Number(p.score||0).toFixed(1)} · base ${Number(p.baseScore||0).toFixed(1)}</span><span>${p.views||0} visualizações · ${p.clicks||0} cliques · CTR ${ctr.toFixed(1)}%</span><span>${p.verifiedConversions||0} conversão(ões) verificadas · ${pct(p.commissionRate)}</span><em>${signalLabel(p.signal)}${p.evidenceSufficientForSale?' · evidência mínima atingida':''}</em></article>`;}).join(''):'<p class="note">O cérebro ainda está acumulando sinais. Isso é normal no início.</p>'}<h3>${selected.length?'Produtos priorizados pelo robô':'Catálogo afiliado em avaliação'}</h3>${products.length?products.map(p=>{const url=p.id?`/go?product=${encodeURIComponent(p.id)}&source=dashboard`:(p.affiliateUrl||'');const cta=url?`<a class="btn" href="${String(url)}" target="_blank" rel="noopener noreferrer">Comprar / ver oferta</a>`:'<span class="note">Link de venda ainda não disponível</span>';const clicks=clickMap.get(p.id)||0;return `<article class="product-card"><strong>${String(p.name||'Produto')}</strong><span>${String(p.providerName||p.provider||p.category||'')}</span><span>${money(p.price)} · ${pct(p.commissionRate)}</span><em>${p.score==null?'Aguardando evidência':'Score '+Number(p.score||0)}</em><span>${clicks} clique${clicks===1?'':'s'}</span>${cta}</article>`;}).join(''):'<p class="note">Nenhum produto cadastrado no catálogo ainda.</p>'}<p class="note">O cérebro comercial recalcula prioridades com base em evidência real. Score alto orienta prioridade, mas não transforma automaticamente um candidato em venda elegível.</p>`;
+    const slotIds=new Set(slots.map(s=>s.productId));
+    root.innerHTML=`<h2>Central autônoma</h2><div class="live-grid"><div><b>${Number(pipeline.researched||0)}</b><span>oportunidades pesquisadas</span></div><div><b>${Number(pipeline.catalog||products.length||0)}</b><span>produtos cadastrados</span></div><div><b>${clicksToday}</b><span>cliques hoje</span></div><div><b>${totalClicks}</b><span>cliques acumulados</span></div><div><b>${Number(content.publishedToday||0)}</b><span>conteúdos publicados hoje</span></div><div><b>${Number(content.published||0)}</b><span>conteúdos publicados</span></div></div><h3>🎯 Terceira camada — onde o NEXORA concentra esforço</h3>${slots.length?slots.map((s,i)=>`<article class="product-card"><strong>#${i+1} · ${String(s.name||s.productId||'Produto')}</strong><span>Peso de esforço ${Number(s.weight||0).toFixed(1)}%</span><span>Score comercial ${Number(s.score||0).toFixed(1)}</span><em>${allocationLabel(s.reason)}</em></article>`).join(''):'<p class="note">A alocação ainda está acumulando sinais. O NEXORA mantém exploração controlada enquanto aprende.</p>'}<h3>🧠 Cérebro comercial — prioridades</h3>${topBrain.length?topBrain.map((p,i)=>{const ctr=Number(p.ctr||0)*100;return `<article class="product-card"><strong>#${i+1} · ${String(p.name||'Produto')}</strong><span>Score ${Number(p.score||0).toFixed(1)} · base ${Number(p.baseScore||0).toFixed(1)}${slotIds.has(p.id)?' · 🎯 em foco':''}</span><span>${p.views||0} visualizações · ${p.clicks||0} cliques · CTR ${ctr.toFixed(1)}%</span><span>${p.verifiedConversions||0} conversão(ões) verificadas · ${pct(p.commissionRate)}</span><em>${signalLabel(p.signal)}${p.evidenceSufficientForSale?' · evidência mínima atingida':''}</em></article>`;}).join(''):'<p class="note">O cérebro ainda está acumulando sinais. Isso é normal no início.</p>'}<h3>${selected.length?'Produtos priorizados pelo robô':'Catálogo afiliado em avaliação'}</h3>${products.length?products.map(p=>{const url=p.id?`/go?product=${encodeURIComponent(p.id)}&source=dashboard`:(p.affiliateUrl||'');const cta=url?`<a class="btn" href="${String(url)}" target="_blank" rel="noopener noreferrer">Comprar / ver oferta</a>`:'<span class="note">Link de venda ainda não disponível</span>';const clicks=clickMap.get(p.id)||0;return `<article class="product-card"><strong>${String(p.name||'Produto')}</strong><span>${String(p.providerName||p.provider||p.category||'')}</span><span>${money(p.price)} · ${pct(p.commissionRate)}</span><em>${p.score==null?'Aguardando evidência':'Score '+Number(p.score||0)}</em><span>${clicks} clique${clicks===1?'':'s'}</span>${cta}</article>`;}).join(''):'<p class="note">Nenhum produto cadastrado no catálogo ainda.</p>'}<p class="note">A terceira camada distribui esforço entre produtos conforme sinais reais e reserva parte da capacidade para exploração. Score e prioridade não significam venda garantida.</p>`;
   }catch(e){
     const message=e?.name==='AbortError'?'A API demorou mais de 10 segundos para responder.':'Não foi possível carregar os dados da Central autônoma agora.';
     showError(message);
