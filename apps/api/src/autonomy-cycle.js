@@ -18,18 +18,29 @@ async function loadFallbackKeywords(env) {
 async function persistAffiliateCatalogOpportunities(env, observedAt) {
   if (!env?.DB) return 0;
   const result = await env.DB.prepare(`SELECT a.id,a.name,a.price,a.currency,a.commission_rate,a.commission_amount,
-      a.affiliate_url,a.status,a.evidence_json,
+      a.affiliate_url,a.status,a.score AS product_score,a.evidence_json,
       COALESCE((SELECT o.score FROM commercial_opportunities o
         WHERE lower(o.name)=lower(a.name)
-        ORDER BY o.observed_at DESC LIMIT 1), a.score, 0) AS effective_score
+        ORDER BY o.observed_at DESC LIMIT 1), 0) AS opportunity_score
     FROM affiliate_products a
     WHERE a.status != 'blocked'
-    ORDER BY effective_score DESC, COALESCE(a.commission_rate,0) DESC, a.name ASC`).all();
+    ORDER BY MAX(COALESCE(a.score,0), COALESCE((SELECT o.score FROM commercial_opportunities o
+      WHERE lower(o.name)=lower(a.name)
+      ORDER BY o.observed_at DESC LIMIT 1),0)) DESC,
+      COALESCE(a.commission_rate,0) DESC, a.name ASC`).all();
 
   let count = 0;
   for (const row of result.results || []) {
     const commissionRate = row.commission_rate == null ? null : Number(row.commission_rate);
-    const score = Number(row.effective_score || 0);
+    // The affiliate product's learned score is the authoritative score for
+    // catalog items. Never let an older zero/low opportunity snapshot erase it.
+    const productScore = Number(row.product_score ?? 0);
+    const opportunityScore = Number(row.opportunity_score ?? 0);
+    const score = Math.max(productScore, opportunityScore);
+    const isEligible = Number.isFinite(commissionRate)
+      && commissionRate >= 0.10
+      && commissionRate <= 1
+      && score >= 80;
     const id = `affiliate-${row.id}`;
     await env.DB.prepare(`INSERT INTO commercial_opportunities
       (id,name,category,score,margin,price,status,source,source_url,demand_score,acceptance_score,conversion_score,economics_score,competition_score,operations_score,observed_at,raw_json)
@@ -39,7 +50,7 @@ async function persistAffiliateCatalogOpportunities(env, observedAt) {
       economics_score=excluded.economics_score, observed_at=excluded.observed_at, raw_json=excluded.raw_json`)
       .bind(
         id, row.name, 'afiliado', score, commissionRate,
-        row.price == null ? null : Number(row.price), 'candidate', 'affiliate_catalog',
+        row.price == null ? null : Number(row.price), isEligible ? 'eligible' : 'candidate', 'affiliate_catalog',
         row.affiliate_url || null, 0, 0, 0,
         commissionRate == null ? 0 : Math.round(commissionRate * 100), 0, 0,
         observedAt,
