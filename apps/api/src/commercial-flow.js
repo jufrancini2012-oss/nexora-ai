@@ -12,9 +12,11 @@ export function selectCommercialProducts(products, policy) {
 
     // Afiliados não possuem "margem" operacional igual a um produto próprio.
     // Para eles, a comissão é o critério econômico verificável de entrada.
-    if (p.commercialType === 'affiliate' || p.affiliateUrl) {
-      return Number(p.commissionRate) >= Number(policy.minAffiliateCommission ?? 0.10)
-        && Number(p.commissionRate) <= 1;
+    if (p.commercialType === 'affiliate' || p.affiliateUrl || p.source === 'affiliate_catalog') {
+      const commissionRate = Number(p.commissionRate ?? p.margin);
+      return Number.isFinite(commissionRate)
+        && commissionRate >= Number(policy.minAffiliateCommission ?? 0.10)
+        && commissionRate <= 1;
     }
 
     return p.margin != null && p.margin >= policy.minMargin;
@@ -31,11 +33,11 @@ export function buildOffer(product, overrides = {}) {
   // Oferta de afiliado: a conversão acontece no destino do parceiro, não no
   // checkout sandbox do NEXORA. Preço pode permanecer desconhecido sem impedir
   // a divulgação, desde que o link afiliado esteja presente.
-  if (product.commercialType === 'affiliate' || product.affiliateUrl) {
-    const affiliateUrl = overrides.affiliateUrl || product.affiliateUrl;
-    if (!affiliateUrl) throw new Error('AFFILIATE_URL_REQUIRED');
+  if (product.commercialType === 'affiliate' || product.affiliateUrl || product.source === 'affiliate_catalog') {
+    const affiliateUrl = overrides.affiliateUrl || product.affiliateUrl || product.sourceUrl;
     const score = Number(product.score);
-    const commissionRate = Number(product.commissionRate);
+    const commissionRate = Number(product.commissionRate ?? product.margin);
+    if (!affiliateUrl) throw new Error('AFFILIATE_URL_REQUIRED');
     if (!Number.isFinite(score) || !Number.isFinite(commissionRate)) throw new Error('VERIFIED_AFFILIATE_DATA_REQUIRED');
     if (score < 80 || commissionRate < 0.10 || product.status === 'blocked') throw new Error('PRODUCT_NOT_READY_FOR_AFFILIATE_OFFER');
 
