@@ -6,8 +6,30 @@ const DEFAULT_OFFER = {
   checkout: 'sandbox'
 };
 
+function dedupeCommercialProducts(products = []) {
+  const seen = new Set();
+  const result = [];
+
+  for (const product of products) {
+    const affiliateUrl = product.affiliateUrl || product.sourceUrl || '';
+    const externalId = product.externalId || '';
+    const normalizedName = String(product.name || '').trim().toLowerCase().replace(/\s+/g, ' ');
+    const key = affiliateUrl
+      ? `url:${affiliateUrl}`
+      : externalId
+        ? `external:${product.provider || ''}:${externalId}`
+        : `name:${normalizedName}`;
+
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(product);
+  }
+
+  return result;
+}
+
 export function selectCommercialProducts(products, policy) {
-  const eligible = products.filter((p) => {
+  const eligible = dedupeCommercialProducts(products).filter((p) => {
     if (!policy.autonomyEnabled || p.status === 'blocked' || p.score < policy.minScore) return false;
 
     // Afiliados não possuem "margem" operacional igual a um produto próprio.
