@@ -5,6 +5,7 @@ import { learnCommercialBrain } from './commercial-brain.js';
 import { allocateCommercialEffort } from './effort-allocation.js';
 
 const FALLBACK_RESEARCH_LIMIT = 5;
+const MAX_AUTONOMOUS_CONTENT_PER_CYCLE = 5;
 
 async function loadFallbackKeywords(env) {
   if (!env?.DB) return [];
@@ -37,18 +38,10 @@ async function persistAffiliateCatalogOpportunities(env, observedAt) {
       price=excluded.price, status=excluded.status, source_url=excluded.source_url,
       economics_score=excluded.economics_score, observed_at=excluded.observed_at, raw_json=excluded.raw_json`)
       .bind(
-        id,
-        row.name,
-        'afiliado',
-        score,
-        commissionRate,
-        row.price == null ? null : Number(row.price),
-        'candidate',
-        'affiliate_catalog',
-        row.affiliate_url || null,
-        0, 0, 0,
-        commissionRate == null ? 0 : Math.round(commissionRate * 100),
-        0, 0,
+        id, row.name, 'afiliado', score, commissionRate,
+        row.price == null ? null : Number(row.price), 'candidate', 'affiliate_catalog',
+        row.affiliate_url || null, 0, 0, 0,
+        commissionRate == null ? 0 : Math.round(commissionRate * 100), 0, 0,
         observedAt,
         JSON.stringify({
           source: 'affiliate_catalog',
@@ -113,9 +106,6 @@ export async function runAutonomyCycle(env, options = {}) {
         }
       }
 
-      // Mesmo sem token de tendências, o ciclo continua usando a busca pública
-      // de produtos do Mercado Livre sobre os produtos do catálogo. Isso evita
-      // que uma credencial opcional interrompa conteúdo, aprendizado e alocação.
       if (!trends.length) {
         const fallbackKeywords = await loadFallbackKeywords(env);
         trends = fallbackKeywords.map((name, index) => ({
@@ -145,8 +135,6 @@ export async function runAutonomyCycle(env, options = {}) {
             scores.competitionScore, scores.operationsScore, observedAt, JSON.stringify(trend.raw)).run();
       }
 
-      // Exploração controlada: pesquisa os melhores sinais e transforma os
-      // resultados em candidatos concretos, sem ativá-los como afiliados automaticamente.
       for (const trend of trends.slice(0, FALLBACK_RESEARCH_LIMIT)) {
         const candidates = await searchMercadoLivreProducts(trend.name, env.MELI_ACCESS_TOKEN, 5);
         for (const product of candidates) {
@@ -155,9 +143,6 @@ export async function runAutonomyCycle(env, options = {}) {
         }
       }
 
-      // Ponte econômica: transforma o catálogo afiliado cadastrado em
-      // oportunidades comerciais explícitas. A comissão é tratada como
-      // economia de afiliado, não como margem de produto próprio.
       await persistAffiliateCatalogOpportunities(env, observedAt);
 
       selectedCount = Number((await env.DB.prepare(`SELECT COUNT(*) AS count FROM commercial_opportunities
@@ -168,7 +153,10 @@ export async function runAutonomyCycle(env, options = {}) {
       brain = await learnCommercialBrain(env);
       allocation = await allocateCommercialEffort(env, { maxSlots: 3 });
       learning = await learnFromContentPerformance(env);
-      content = await generateAutonomousContent(env, { max: 3, priorityProductIds: allocation.slots.map(slot => slot.productId) });
+      content = await generateAutonomousContent(env, {
+        max: MAX_AUTONOMOUS_CONTENT_PER_CYCLE,
+        priorityProductIds: allocation.slots.map(slot => slot.productId)
+      });
     }
 
     let growth = null;
@@ -184,7 +172,7 @@ export async function runAutonomyCycle(env, options = {}) {
         VALUES (?,?,?,?,?,?,?,?,?,?)
         ON CONFLICT(business_date) DO UPDATE SET net_profit=excluded.net_profit,
         reserved_amount=excluded.reserved_amount,status=excluded.status,updated_at=excluded.updated_at`)
-        .bind(`growth_${day}`, day, netProfit, 1000, 0.10, decision.reservedAmount,
+        .bind(`growth_${day}`, day, netProfit, 500, 0.10, decision.reservedAmount,
           decision.eligible ? 'reserved' : 'not_eligible', 'production', startedAt, new Date().toISOString()).run();
     }
 
