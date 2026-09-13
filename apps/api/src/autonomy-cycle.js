@@ -1,6 +1,7 @@
 import { fetchMercadoLivreTrends, trendScores } from './mercadolivre-trends.js';
 import { calculateReinvestment, calculateVerifiedNetProfit } from './reinvestment-policy.js';
 import { generateAutonomousContent, learnFromContentPerformance } from './content-engine.js';
+import { learnCommercialBrain } from './commercial-brain.js';
 
 export async function runAutonomyCycle(env, options = {}) {
   const startedAt = new Date().toISOString();
@@ -12,6 +13,7 @@ export async function runAutonomyCycle(env, options = {}) {
   let selectedCount = 0;
   let content = { created: 0, skipped: 0 };
   let learning = { updated: 0 };
+  let brain = { updated: 0, products: [] };
   try {
     let trends = [];
     if (env?.MELI_ACCESS_TOKEN && env?.DB) {
@@ -34,6 +36,7 @@ export async function runAutonomyCycle(env, options = {}) {
     }
 
     if (env?.DB) {
+      brain = await learnCommercialBrain(env);
       learning = await learnFromContentPerformance(env);
       content = await generateAutonomousContent(env, { max: 3 });
     }
@@ -57,8 +60,8 @@ export async function runAutonomyCycle(env, options = {}) {
 
     const finishedAt = new Date().toISOString();
     if (env?.DB) await env.DB.prepare(`UPDATE autonomy_runs SET finished_at=?,status=?,researched_count=?,selected_count=?,action_count=? WHERE id=?`)
-      .bind(finishedAt, 'completed', researchedCount, Number(selectedCount), Number(content.created || 0), runId).run();
-    return { ok: true, runId, trigger, status: 'completed', researchedCount, selectedCount: Number(selectedCount), content, learning, growth };
+      .bind(finishedAt, 'completed', researchedCount, Number(selectedCount), Number(content.created || 0) + Number(brain.updated || 0), runId).run();
+    return { ok: true, runId, trigger, status: 'completed', researchedCount, selectedCount: Number(selectedCount), brain, content, learning, growth };
   } catch (error) {
     const finishedAt = new Date().toISOString();
     if (env?.DB) await env.DB.prepare(`UPDATE autonomy_runs SET finished_at=?,status=?,researched_count=?,selected_count=?,error=? WHERE id=?`)
