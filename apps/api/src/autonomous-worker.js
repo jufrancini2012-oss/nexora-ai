@@ -2,6 +2,7 @@ import app from './worker.js';
 import { runAutonomyCycle } from './autonomy-cycle.js';
 import { handleAffiliateRedirect } from './affiliate-redirect.js';
 import { loadAffiliateStats } from './affiliate-stats.js';
+import { loadContentStats, getContent } from './content-engine.js';
 import { handleOrganicContent, handleOrganicRobots, handleOrganicSitemap } from './organic-content.js';
 
 function json(data, status = 200) {
@@ -12,11 +13,21 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     if (url.pathname === '/api/affiliate/stats' && request.method === 'GET') {
+      try { return json({ ok: true, stats: await loadAffiliateStats(env) }); }
+      catch (error) { return json({ ok: false, error: error.message }, 500); }
+    }
+    if (url.pathname === '/api/content/stats' && request.method === 'GET') {
+      try { return json({ ok: true, stats: await loadContentStats(env) }); }
+      catch (error) { return json({ ok: false, error: error.message }, 500); }
+    }
+    if (url.pathname === '/api/content' && request.method === 'GET') {
       try {
-        return json({ ok: true, stats: await loadAffiliateStats(env) });
-      } catch (error) {
-        return json({ ok: false, error: error.message }, 500);
-      }
+        const slug = url.searchParams.get('slug');
+        if (!slug) return json({ ok: false, error: 'SLUG_REQUIRED' }, 400);
+        const content = await getContent(env, slug);
+        if (!content) return json({ ok: false, error: 'CONTENT_NOT_FOUND' }, 404);
+        return json({ ok: true, content });
+      } catch (error) { return json({ ok: false, error: error.message }, 500); }
     }
     const robotsResponse = await handleOrganicRobots(request);
     if (robotsResponse) return robotsResponse;
