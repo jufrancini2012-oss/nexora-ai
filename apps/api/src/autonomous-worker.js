@@ -11,6 +11,26 @@ function json(data, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'access-control-allow-origin': '*' } });
 }
 
+function xmlEscape(value = '') {
+  return String(value).replace(/[&<>\"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;' }[c]));
+}
+
+async function handleOrganicFeed(request, env) {
+  if (request.method !== 'GET' || new URL(request.url).pathname !== '/feed.xml') return null;
+  const url = new URL(request.url);
+  let items = [];
+  if (env?.DB) {
+    const result = await env.DB.prepare("SELECT slug,title,meta_description,created_at FROM content_items WHERE status='published' ORDER BY created_at DESC LIMIT 30").all();
+    items = result.results || [];
+  }
+  const entries = items.map((item) => {
+    const link = `${url.origin}/conteudo/${encodeURIComponent(item.slug)}`;
+    return `<item><title>${xmlEscape(item.title)}</title><link>${xmlEscape(link)}</link><guid isPermaLink="true">${xmlEscape(link)}</guid><description>${xmlEscape(item.meta_description || '')}</description><pubDate>${new Date(item.created_at || Date.now()).toUTCString()}</pubDate></item>`;
+  }).join('');
+  const xml = `<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel><title>NEXORA AI — Guias de compra</title><link>${xmlEscape(`${url.origin}/conteudo`)}</link><description>Novos guias de compra publicados pelo motor autônomo da NEXORA AI.</description>${entries}</channel></rss>`;
+  return new Response(xml, { status: 200, headers: { 'content-type': 'application/rss+xml; charset=utf-8', 'cache-control': 'public,max-age=900' } });
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -39,6 +59,8 @@ export default {
         return json({ ok: true, content });
       } catch (error) { return json({ ok: false, error: error.message }, 500); }
     }
+    const feedResponse = await handleOrganicFeed(request, env);
+    if (feedResponse) return feedResponse;
     const robotsResponse = await handleOrganicRobots(request);
     if (robotsResponse) return robotsResponse;
     const sitemapResponse = await handleOrganicSitemap(request, env);
