@@ -34,3 +34,11 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: npx --yes wrangler@4 deploy
+
+      - name: Smoke test real do catálogo
+        run: |
+          set -e
+          sleep 3
+          BODY=$(curl -fsS --retry 3 --retry-delay 2 https://nexora-ai.ju-francini2012.workers.dev/api/products)
+          echo "$BODY"
+          node -e 'const d=JSON.parse(process.argv[1]); if(!Array.isArray(d.products) || d.products.length < 5) { console.error(`CATALOG_SMOKE_TEST_FAILED: ${d.products?.length ?? 0} produtos`); process.exit(1); } console.log(`CATALOG_SMOKE_TEST_OK: ${d.products.length} produtos`);' "$BODY"
