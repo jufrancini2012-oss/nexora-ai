@@ -1,4 +1,4 @@
-import { fetchMercadoLivreTrends, trendScores } from './mercadolivre-trends.js';
+import { fetchMercadoLivreTrends, searchMercadoLivreProducts, trendScores } from './mercadolivre-trends.js';
 import { calculateReinvestment, calculateVerifiedNetProfit } from './reinvestment-policy.js';
 import { generateAutonomousContent, learnFromContentPerformance } from './content-engine.js';
 import { learnCommercialBrain } from './commercial-brain.js';
@@ -12,6 +12,7 @@ export async function runAutonomyCycle(env, options = {}) {
 
   let researchedCount = 0;
   let selectedCount = 0;
+  let productCandidates = 0;
   let content = { created: 0, skipped: 0 };
   let learning = { updated: 0 };
   let brain = { updated: 0, products: [] };
@@ -22,6 +23,7 @@ export async function runAutonomyCycle(env, options = {}) {
       trends = await fetchMercadoLivreTrends(env.MELI_ACCESS_TOKEN);
       researchedCount = trends.length;
       const observedAt = new Date().toISOString();
+
       for (const trend of trends) {
         const scores = trendScores(trend.rank);
         const id = `mli-${trend.name.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,70)}-${trend.rank}`;
@@ -34,7 +36,33 @@ export async function runAutonomyCycle(env, options = {}) {
             scores.demandScore, scores.acceptanceScore, scores.conversionScore, scores.economicsScore,
             scores.competitionScore, scores.operationsScore, observedAt, JSON.stringify(trend.raw)).run();
       }
-      selectedCount = (await env.DB.prepare('SELECT COUNT(*) AS count FROM commercial_opportunities WHERE score >= 80 AND margin >= 0.25 AND status != ?').bind('blocked').first())?.count || 0;
+
+      // Exploração controlada: transforma apenas os 5 melhores sinais em produtos concretos.
+      // Os candidatos ficam separados do catálogo afiliado ativo até existir link/atribuição válida.
+      for (const trend of trends.slice(0, 5)) {
+        const candidates = await searchMercadoLivreProducts(trend.name, env.MELI_ACCESS_TOKEN, 5);
+        for (const product of candidates) {
+          const candidateId = `mli-item-${product.itemId}`;
+          const score = Math.round(((product.score?.score ?? product.score ?? 0) * 0.75) + (trendScores(trend.rank).score * 0.25));
+          const candidateRaw = { ...product.raw, source_keyword: trend.name, trend_rank: trend.rank };
+          await env.DB.prepare(`INSERT INTO commercial_opportunities
+            (id,name,category,score,margin,price,status,source,source_url,demand_score,acceptance_score,conversion_score,economics_score,competition_score,operations_score,observed_at,raw_json)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            ON CONFLICT(source,name) DO UPDATE SET score=excluded.score, category=excluded.category,
+            price=excluded.price, source_url=excluded.source_url, demand_score=excluded.demand_score,
+            acceptance_score=excluded.acceptance_score, conversion_score=excluded.conversion_score,
+            economics_score=excluded.economics_score, competition_score=excluded.competition_score,
+            operations_score=excluded.operations_score, observed_at=excluded.observed_at, raw_json=excluded.raw_json`)
+            .bind(candidateId, product.name, product.category, score, null, product.price, 'candidate', 'mercadolivre_product_search',
+              product.permalink, product.score?.demandScore || 0, product.score?.acceptanceScore || 0,
+              product.score?.conversionScore || 0, product.score?.economicsScore || 0,
+              product.score?.competitionScore || 0, product.score?.operationsScore || 0,
+              observedAt, JSON.stringify(candidateRaw)).run();
+          productCandidates += 1;
+        }
+      }
+
+      selectedCount = (await env.DB.prepare('SELECT COUNT(*) AS count FROM commercial_opportunities WHERE score >= 80 AND status IN (?,?)').bind('observe','candidate').first())?.count || 0;
     }
 
     if (env?.DB) {
@@ -63,8 +91,8 @@ export async function runAutonomyCycle(env, options = {}) {
 
     const finishedAt = new Date().toISOString();
     if (env?.DB) await env.DB.prepare(`UPDATE autonomy_runs SET finished_at=?,status=?,researched_count=?,selected_count=?,action_count=? WHERE id=?`)
-      .bind(finishedAt, 'completed', researchedCount, Number(selectedCount), Number(content.created || 0) + Number(brain.updated || 0) + Number(allocation.slots?.length || 0), runId).run();
-    return { ok: true, runId, trigger, status: 'completed', researchedCount, selectedCount: Number(selectedCount), brain, allocation, content, learning, growth };
+      .bind(finishedAt, 'completed', researchedCount, Number(selectedCount), Number(content.created || 0) + Number(brain.updated || 0) + Number(allocation.slots?.length || 0) + Number(productCandidates), runId).run();
+    return { ok: true, runId, trigger, status: 'completed', researchedCount, productCandidates, selectedCount: Number(selectedCount), brain, allocation, content, learning, growth };
   } catch (error) {
     const finishedAt = new Date().toISOString();
     if (env?.DB) await env.DB.prepare(`UPDATE autonomy_runs SET finished_at=?,status=?,researched_count=?,selected_count=?,error=? WHERE id=?`)
