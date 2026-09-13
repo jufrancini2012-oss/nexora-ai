@@ -16,14 +16,19 @@ function xmlEscape(value = '') {
 }
 
 async function loadDistribution(env) {
-  if (!env?.DB) return { stats: { published: 0, publishedToday: 0, events: 0, clicks: 0 }, items: [] };
-  const [content, clicks, items] = await Promise.all([
+  if (!env?.DB) return { stats: { published: 0, publishedToday: 0, events: 0, clicks: 0, organicClicks: 0 }, items: [] };
+  const [content, clicks, organicClicks, items] = await Promise.all([
     loadContentStats(env),
+    env.DB.prepare('SELECT COUNT(*) AS count FROM affiliate_clicks').first(),
     env.DB.prepare("SELECT COUNT(*) AS count FROM affiliate_clicks WHERE source='organic'").first(),
     env.DB.prepare("SELECT slug,title,created_at FROM content_items WHERE status='published' ORDER BY created_at DESC LIMIT 5").all()
   ]);
   return {
-    stats: { ...content, clicks: Number(clicks?.count || 0) },
+    stats: {
+      ...content,
+      clicks: Number(clicks?.count || 0),
+      organicClicks: Number(organicClicks?.count || 0)
+    },
     items: (items.results || []).map((item) => ({ ...item }))
   };
 }
