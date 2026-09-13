@@ -1,4 +1,9 @@
 const MAX_DAILY_PUBLICATIONS = 5;
+const CONTENT_VARIANTS = [
+  { key: 'vale-a-pena', label: 'vale a pena', heading: 'Vale a pena considerar esta oferta?', intro: 'Este guia ajuda a decidir se a oferta faz sentido para o seu perfil, sem depender apenas de preço ou de uma recomendação automática.' },
+  { key: 'como-escolher', label: 'como escolher', heading: 'Como escolher melhor antes de comprar', intro: 'Antes de comprar, vale comparar os principais critérios que podem mudar o custo-benefício e a experiência de uso.' },
+  { key: 'comparativo', label: 'comparativo', heading: 'O que comparar antes de fechar a compra', intro: 'Uma comparação simples de preço, avaliações, condições e características ajuda a reduzir decisões por impulso.' }
+];
 
 function slugify(value = '') {
   return String(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 90);
@@ -8,15 +13,17 @@ function escapeHtml(value = '') {
   return String(value).replace(/[&<>\"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;' }[char]));
 }
 
-function articleForProduct(product) {
+function articleForProduct(product, variant = CONTENT_VARIANTS[0]) {
   const name = escapeHtml(product.name);
   const price = product.price == null ? 'preço a confirmar' : `R$ ${Number(product.price).toFixed(2).replace('.', ',')}`;
   const commission = product.commissionRate == null ? 'comissão a confirmar' : `${Math.round(Number(product.commissionRate) * 100)}%`;
+  const productSlug = slugify(product.name);
+  const slug = `${productSlug}-${variant.key}`;
   return {
-    title: `${product.name}: vale a pena? Guia rápido antes de comprar`,
-    meta: `Veja o que observar antes de comprar ${product.name}, faixa de preço, pontos de atenção e onde consultar a oferta.`.slice(0, 155),
-    slug: slugify(product.name),
-    body: `<article class="seo-article"><p><strong>${name}</strong> aparece entre as ofertas acompanhadas pelo NEXORA AI. Este guia reúne informações práticas para ajudar você a avaliar a compra.</p><h2>O que observar antes de comprar</h2><p>Compare preço, avaliação dos compradores, descrição, disponibilidade, prazo de entrega e política de devolução. Esses fatores ajudam a evitar uma compra baseada apenas no preço.</p><h2>Faixa de preço acompanhada</h2><p>No catálogo atual do NEXORA, a referência registrada é <strong>${price}</strong>. Preços e disponibilidade podem mudar, então confirme os dados na página da oferta antes de comprar.</p><h2>Para quem pode fazer sentido</h2><p>A oferta pode ser interessante para quem procura exatamente esse tipo de produto e encontra uma combinação adequada de preço, avaliação e condições de entrega.</p><h2>Como o NEXORA acompanha esta oferta</h2><p>O NEXORA monitora sinais comerciais e mede os cliques encaminhados. A comissão estimada registrada para esta oferta é ${commission}, mas nenhuma comissão é considerada receita confirmada até existir confirmação do programa de afiliados.</p><p><a class="btn" href="/go?product=${encodeURIComponent(product.id)}&source=organic&campaign=${encodeURIComponent(slugify(product.name))}" target="_blank" rel="noopener noreferrer sponsored nofollow">Ver oferta atual</a></p><p class="note">As condições podem mudar. Confira preço, vendedor, avaliações e regras diretamente na página do parceiro.</p></article>`
+    title: `${product.name}: ${variant.label}? Guia rápido`,
+    meta: `${variant.heading}. Veja preço de referência, critérios de compra e onde consultar a oferta atual de ${product.name}.`.slice(0, 155),
+    slug,
+    body: `<article class="seo-article"><p><strong>${name}</strong> aparece entre as ofertas acompanhadas pelo NEXORA AI.</p><p>${variant.intro}</p><h2>${variant.heading}</h2><p>Confira preço, avaliação dos compradores, descrição, disponibilidade, prazo de entrega e política de devolução. Se houver diferenças importantes entre anúncios, priorize as condições que realmente atendem à sua necessidade.</p><h2>Preço e condições</h2><p>A referência registrada no catálogo do NEXORA é <strong>${price}</strong>. Preços, estoque, frete e condições podem mudar; confirme sempre os dados na página da oferta antes de comprar.</p><h2>Como comparar</h2><ul><li>Compare o preço final, incluindo frete quando aplicável.</li><li>Observe avaliações e quantidade de compradores.</li><li>Confira especificações, tamanho, modelo ou compatibilidade.</li><li>Verifique prazo, vendedor e política de devolução.</li></ul><h2>Como o NEXORA acompanha</h2><p>O NEXORA mede visualizações e cliques encaminhados para entender quais temas e ofertas despertam mais interesse. A comissão estimada registrada é ${commission}; isso não representa receita confirmada.</p><p><a class="btn" href="/go?product=${encodeURIComponent(product.id)}&source=organic&campaign=${encodeURIComponent(slug)}" target="_blank" rel="noopener noreferrer sponsored nofollow">Ver oferta atual</a></p><p><a href="/conteudo">Ver mais guias de compra</a> · <a href="/ofertas">Ver ofertas em destaque</a></p><p class="note">Conteúdo informativo. Confirme preço, vendedor, avaliações, frete e regras diretamente na página do parceiro.</p></article>`
   };
 }
 
@@ -41,17 +48,20 @@ export async function generateAutonomousContent(env, { max = MAX_DAILY_PUBLICATI
   const products = await candidates(env, priorityProductIds);
   let created = 0, skipped = 0;
   for (const product of products) {
+    for (const variant of CONTENT_VARIANTS) {
+      if (!remaining) break;
+      const article = articleForProduct(product, variant);
+      const exists = await env.DB.prepare('SELECT id FROM content_items WHERE slug=? LIMIT 1').bind(article.slug).first();
+      if (exists) { skipped += 1; continue; }
+      const now = new Date().toISOString();
+      const id = `content_${crypto.randomUUID()}`;
+      await env.DB.prepare(`INSERT INTO content_items (id,slug,title,meta_description,body_html,content_type,product_id,source,status,score,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`).bind(id, article.slug, article.title, article.meta, article.body, 'seo_product', product.id, 'nexora_autonomous', 'published', Number(product.score || 0), now, now).run();
+      await env.DB.prepare(`INSERT INTO content_events (id,content_id,event_type,occurred_at,metadata_json) VALUES (?,?,?,?,?)`).bind(`event_${crypto.randomUUID()}`, id, 'published', now, JSON.stringify({ productId: product.id, variant: variant.key })).run();
+      created += 1; remaining -= 1;
+    }
     if (!remaining) break;
-    const article = articleForProduct(product);
-    const exists = await env.DB.prepare('SELECT id FROM content_items WHERE slug=? LIMIT 1').bind(article.slug).first();
-    if (exists) { skipped += 1; continue; }
-    const now = new Date().toISOString();
-    const id = `content_${crypto.randomUUID()}`;
-    await env.DB.prepare(`INSERT INTO content_items (id,slug,title,meta_description,body_html,content_type,product_id,source,status,score,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`).bind(id, article.slug, article.title, article.meta, article.body, 'seo_product', product.id, 'nexora_autonomous', 'published', Number(product.score || 0), now, now).run();
-    await env.DB.prepare(`INSERT INTO content_events (id,content_id,event_type,occurred_at,metadata_json) VALUES (?,?,?,?,?)`).bind(`event_${crypto.randomUUID()}`, id, 'published', now, JSON.stringify({ productId: product.id })).run();
-    created += 1; remaining -= 1;
   }
-  return { created, skipped, remaining, prioritized: priorityProductIds.slice(0, MAX_DAILY_PUBLICATIONS) };
+  return { created, skipped, remaining, variants: CONTENT_VARIANTS.map((v) => v.key), prioritized: priorityProductIds.slice(0, MAX_DAILY_PUBLICATIONS) };
 }
 
 export async function learnFromContentPerformance(env) {
