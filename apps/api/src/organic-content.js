@@ -1,4 +1,4 @@
-function escapeHtml(value){return String(value ?? '').replace(/[&<>\'"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','\"':'&quot;'}[c]));}
+function escapeHtml(value){return String(value ?? '').replace(/[&<>\'\"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','\"':'&quot;'}[c]));}
 
 function slugify(value){
   return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,90);
@@ -23,11 +23,33 @@ function fallbackProductPage(product, origin){
   return pageShell({title:`${product.name} — guia e oferta`,description:`Informações para comparar ${product.name} e consultar a oferta disponível no parceiro.`,canonical,body});
 }
 
+async function loadPublicProducts(env){
+  if(!env?.DB) return [];
+  const result = await env.DB.prepare(`SELECT id,name,category,price,currency,commission_rate AS commissionRate,score FROM affiliate_products WHERE status != 'blocked' ORDER BY COALESCE(score,0) DESC, commission_rate DESC, name ASC LIMIT 20`).all();
+  return result.results || [];
+}
+
+function offerHubPage(products, origin){
+  const cards = products.map((p) => {
+    const price = p.price == null ? null : Number(p.price).toLocaleString('pt-BR',{style:'currency',currency:p.currency || 'BRL'});
+    const commission = p.commissionRate == null ? null : `${(Number(p.commissionRate)*100).toFixed(0)}%`;
+    return `<article class="card"><h2>${escapeHtml(p.name)}</h2><p class="muted">${escapeHtml(p.category || 'Oferta em avaliação')}</p>${price?`<p><strong>${escapeHtml(price)}</strong></p>`:''}${commission?`<p class="muted">Comissão estimada: ${escapeHtml(commission)}</p>`:''}<a class="cta" rel="sponsored nofollow" href="${escapeHtml(affiliateUrl(p,'organic','ofertas'))}">Ver oferta</a></article>`;
+  }).join('');
+  const body = `<header><h1>NEXORA AI — Ofertas em destaque</h1><p>Uma seleção de produtos em avaliação pelo nosso motor comercial. Consulte preço, vendedor, avaliações, frete e condições diretamente no parceiro antes de comprar.</p></header><main class="grid">${cards || '<div class="card"><p>Nenhuma oferta disponível no momento.</p></div>'}</main><footer class="muted"><p>Links de parceiro podem gerar comissão para a NEXORA AI sem custo adicional para o comprador. Preços e condições podem mudar.</p><p><a href="/conteudo">Ver guias de compra</a></p></footer>`;
+  return pageShell({title:'NEXORA AI — Ofertas em destaque',description:'Ofertas e produtos em destaque selecionados pelo motor comercial da NEXORA AI.',canonical:`${origin}/ofertas`,body});
+}
+
 export async function handleOrganicContent(request, env){
   if(request.method !== 'GET') return null;
   const url = new URL(request.url);
-  if(!url.pathname.startsWith('/conteudo')) return null;
   const origin = url.origin;
+
+  if(url.pathname === '/ofertas' || url.pathname === '/ofertas/'){
+    const products = await loadPublicProducts(env);
+    return new Response(offerHubPage(products,origin),{status:200,headers:{'content-type':'text/html;charset=utf-8','cache-control':'public,max-age=300'}});
+  }
+
+  if(!url.pathname.startsWith('/conteudo')) return null;
 
   if(url.pathname === '/conteudo' || url.pathname === '/conteudo/'){
     let items = [];
@@ -40,7 +62,7 @@ export async function handleOrganicContent(request, env){
       const result = await env.DB.prepare(`SELECT id,name FROM affiliate_products WHERE status != 'blocked' ORDER BY COALESCE(score,0) DESC, commission_rate DESC, name ASC`).all();
       cards = (result.results || []).map((p) => `<article class="card"><h2><a href="/conteudo/${escapeHtml(slugify(p.name))}">${escapeHtml(p.name)}</a></h2><p>Guia de compra e pontos para comparar antes de decidir.</p></article>`).join('');
     }
-    const body = `<header><h1>NEXORA AI — guias de compra</h1><p>Conteúdo objetivo para ajudar você a pesquisar, comparar opções e chegar à oferta do parceiro com mais segurança.</p></header><main class="grid">${cards || '<div class="card"><p>Nenhum conteúdo publicado no momento.</p></div>'}</main><footer class="muted"><p>O conteúdo é atualizado pelo motor autônomo do NEXORA. Preços, estoque e condições podem mudar.</p></footer>`;
+    const body = `<header><h1>NEXORA AI — guias de compra</h1><p>Conteúdo objetivo para ajudar você a pesquisar, comparar opções e chegar à oferta do parceiro com mais segurança.</p></header><main class="grid">${cards || '<div class="card"><p>Nenhum conteúdo publicado no momento.</p></div>'}</main><footer class="muted"><p>O conteúdo é atualizado pelo motor autônomo do NEXORA. Preços, estoque e condições podem mudar.</p><p><a href="/ofertas">Ver ofertas em destaque</a></p></footer>`;
     return new Response(pageShell({title:'NEXORA AI — guias de compra',description:'Guias de compra e conteúdo útil criado e atualizado pelo motor autônomo da NEXORA AI.',canonical:`${origin}/conteudo`,body}),{status:200,headers:{'content-type':'text/html;charset=utf-8','cache-control':'public,max-age=300'}});
   }
 
@@ -48,7 +70,7 @@ export async function handleOrganicContent(request, env){
   if(env?.DB){
     const item = await env.DB.prepare("SELECT * FROM content_items WHERE slug=? AND status='published' LIMIT 1").bind(slug).first();
     if(item){
-      const body = `<header><p><a href="/conteudo">← Todos os guias</a></p><h1>${escapeHtml(item.title)}</h1><p class="muted">Atualizado automaticamente pelo NEXORA AI.</p></header><main>${item.body_html}</main><footer class="muted"><p>Conteúdo informativo. Confirme preço, vendedor, avaliações, frete e condições diretamente no parceiro.</p></footer>`;
+      const body = `<header><p><a href="/conteudo">← Todos os guias</a></p><h1>${escapeHtml(item.title)}</h1><p class="muted">Atualizado automaticamente pelo NEXORA AI.</p></header><main>${item.body_html}</main><footer class="muted"><p>Conteúdo informativo. Confirme preço, vendedor, avaliações, frete e condições diretamente no parceiro.</p><p><a href="/ofertas">Ver ofertas em destaque</a></p></footer>`;
       if(item.product_id){
         await env.DB.prepare(`INSERT INTO content_events (id,content_id,event_type,occurred_at,metadata_json) VALUES (?,?,?,?,?)`).bind(`event_${crypto.randomUUID()}`,item.id,'viewed',new Date().toISOString(),JSON.stringify({path:url.pathname})).run();
       }
@@ -70,7 +92,7 @@ export async function handleOrganicRobots(request){
 export async function handleOrganicSitemap(request, env){
   if(request.method !== 'GET' || new URL(request.url).pathname !== '/sitemap.xml') return null;
   const origin = new URL(request.url).origin;
-  let urls = [`${origin}/conteudo`];
+  let urls = [`${origin}/ofertas`,`${origin}/conteudo`];
   if(env?.DB){
     const result = await env.DB.prepare("SELECT slug FROM content_items WHERE status='published' ORDER BY created_at DESC LIMIT 500").all();
     urls.push(...(result.results || []).map((p) => `${origin}/conteudo/${slugify(p.slug)}`));
