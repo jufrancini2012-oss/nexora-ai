@@ -50,6 +50,29 @@ async function loadOpportunities(env){
   }));
 }
 
+async function loadAffiliateCatalog(env){
+  if(!env?.DB) return [];
+  try {
+    const result = await env.DB.prepare(`SELECT id,provider,external_id,name,price,currency,commission_rate,commission_amount,affiliate_url,score,status,evidence_json FROM affiliate_products ORDER BY COALESCE(score,0) DESC, commission_rate DESC, name ASC`).all();
+    return (result.results || []).map((row) => ({
+      id: row.id,
+      provider: row.provider,
+      externalId: row.external_id,
+      name: row.name,
+      price: row.price == null ? null : Number(row.price),
+      currency: row.currency || 'BRL',
+      commissionRate: row.commission_rate == null ? null : Number(row.commission_rate),
+      commissionAmount: row.commission_amount == null ? null : Number(row.commission_amount),
+      affiliateUrl: row.affiliate_url || null,
+      score: row.score == null ? null : Number(row.score),
+      status: row.status || 'candidate',
+      evidence: row.evidence_json ? JSON.parse(row.evidence_json) : null
+    }));
+  } catch {
+    return [];
+  }
+}
+
 async function chooseProducts(env){
   return selectCommercialProducts(await loadOpportunities(env), policy);
 }
@@ -132,20 +155,24 @@ async function route(request, env){
     const persistedOrders = await loadOrders(env);
     const opportunities = await loadOpportunities(env);
     const selected = await chooseProducts(env);
+    const affiliateCatalog = await loadAffiliateCatalog(env);
     return json({
       autonomy: {enabled:policy.autonomyEnabled, mode:'balanced', minScore:policy.minScore},
       kpis:{salesToday:metrics.sales, revenueToday:metrics.revenue, leadsToday:persistedOrders.length, conversionRate:persistedOrders.length ? Number((metrics.sales/persistedOrders.length).toFixed(4)) : 0, netProfitToday:0},
-      pipeline:{researched:opportunities.length, candidates:opportunities.filter((p)=>p.score>=65).length, selected:selected.length, activeTests:selected.length},
-      products:selected,
+      pipeline:{researched:opportunities.length, candidates:opportunities.filter((p)=>p.score>=65).length, selected:selected.length, activeTests:selected.length, catalog:affiliateCatalog.length},
+      products:selected.length ? selected : affiliateCatalog,
+      selectedProducts:selected,
+      affiliateCatalog,
       dataSources:[...new Set(opportunities.map((p)=>p.source))]
     });
   }
 
   if(path==='/api/products') {
     const opportunities = await loadOpportunities(env);
-    return json({products:opportunities, selected:await chooseProducts(env), source:'d1'});
+    const affiliateCatalog = await loadAffiliateCatalog(env);
+    return json({products:affiliateCatalog, selected:await chooseProducts(env), opportunities, source:'d1'});
   }
-  if(path==='/api/autonomy') return json({policy, selected:await chooseProducts(env)});
+  if(path==='/api/autonomy') return json({policy, selected:await chooseProducts(env), catalog:await loadAffiliateCatalog(env)});
   if(path==='/api/finance') {
     const gateway = snapshot(); const metrics = metricsFromGateway(gateway);
     return json({currency:'BRL', sandbox:true, available:metrics.revenue, pending:gateway.payments.filter(p=>p.status==='pending').reduce((s,p)=>s+Number(p.amount||0),0), paidToday:metrics.revenue, payouts:gateway.payouts});
