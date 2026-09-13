@@ -5,7 +5,7 @@ function slugify(value){
 }
 
 function pageShell({title,description,canonical,body}){
-  return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)}</title><meta name="description" content="${escapeHtml(description)}"><link rel="canonical" href="${escapeHtml(canonical)}"><meta name="robots" content="index,follow"><style>body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;max-width:900px;margin:auto;padding:24px;line-height:1.55;color:#172033}a{color:#155eef}.card,.seo-article{border:1px solid #d9dfeb;border-radius:16px;padding:20px;margin:16px 0}.cta,.btn{display:inline-block;padding:12px 18px;border-radius:10px;background:#172033;color:#fff;text-decoration:none}.muted,.note{color:#64748b}.grid{display:grid;gap:16px}@media(min-width:700px){.grid{grid-template-columns:1fr 1fr}}</style></head><body>${body}</body></html>`;
+  return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)}</title><meta name="description" content="${escapeHtml(description)}"><link rel="canonical" href="${escapeHtml(canonical)}"><meta name="robots" content="index,follow"><meta property="og:title" content="${escapeHtml(title)}"><meta property="og:description" content="${escapeHtml(description)}"><meta property="og:type" content="website"><meta property="og:url" content="${escapeHtml(canonical)}"><style>body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;max-width:900px;margin:auto;padding:24px;line-height:1.55;color:#172033}a{color:#155eef}.card,.seo-article{border:1px solid #d9dfeb;border-radius:16px;padding:20px;margin:16px 0}.cta,.btn{display:inline-block;padding:12px 18px;border-radius:10px;background:#172033;color:#fff;text-decoration:none}.muted,.note{color:#64748b}.grid{display:grid;gap:16px}@media(min-width:700px){.grid{grid-template-columns:1fr 1fr}}</style></head><body>${body}</body></html>`;
 }
 
 function affiliateUrl(product, source, campaign){
@@ -33,7 +33,8 @@ function offerHubPage(products, origin){
   const cards = products.map((p) => {
     const price = p.price == null ? null : Number(p.price).toLocaleString('pt-BR',{style:'currency',currency:p.currency || 'BRL'});
     const commission = p.commissionRate == null ? null : `${(Number(p.commissionRate)*100).toFixed(0)}%`;
-    return `<article class="card"><h2>${escapeHtml(p.name)}</h2><p class="muted">${escapeHtml(p.category || 'Oferta em avaliação')}</p>${price?`<p><strong>${escapeHtml(price)}</strong></p>`:''}${commission?`<p class="muted">Comissão estimada: ${escapeHtml(commission)}</p>`:''}<a class="cta" rel="sponsored nofollow" href="${escapeHtml(affiliateUrl(p,'organic','ofertas'))}">Ver oferta</a></article>`;
+    const guide = `/conteudo/${slugify(p.name)}`;
+    return `<article class="card"><h2>${escapeHtml(p.name)}</h2><p class="muted">${escapeHtml(p.category || 'Oferta em avaliação')}</p>${price?`<p><strong>${escapeHtml(price)}</strong></p>`:''}${commission?`<p class="muted">Comissão estimada: ${escapeHtml(commission)}</p>`:''}<p><a href="${escapeHtml(guide)}">Ler guia de compra</a></p><a class="cta" rel="sponsored nofollow" href="${escapeHtml(affiliateUrl(p,'organic','ofertas'))}">Ver oferta</a></article>`;
   }).join('');
   const body = `<header><h1>NEXORA AI — Ofertas em destaque</h1><p>Uma seleção de produtos em avaliação pelo nosso motor comercial. Consulte preço, vendedor, avaliações, frete e condições diretamente no parceiro antes de comprar.</p></header><main class="grid">${cards || '<div class="card"><p>Nenhuma oferta disponível no momento.</p></div>'}</main><footer class="muted"><p>Links de parceiro podem gerar comissão para a NEXORA AI sem custo adicional para o comprador. Preços e condições podem mudar.</p><p><a href="/conteudo">Ver guias de compra</a></p></footer>`;
   return pageShell({title:'NEXORA AI — Ofertas em destaque',description:'Ofertas e produtos em destaque selecionados pelo motor comercial da NEXORA AI.',canonical:`${origin}/ofertas`,body});
@@ -96,7 +97,10 @@ export async function handleOrganicSitemap(request, env){
   if(env?.DB){
     const result = await env.DB.prepare("SELECT slug FROM content_items WHERE status='published' ORDER BY created_at DESC LIMIT 500").all();
     urls.push(...(result.results || []).map((p) => `${origin}/conteudo/${slugify(p.slug)}`));
+    const products = await env.DB.prepare("SELECT name FROM affiliate_products WHERE status != 'blocked' ORDER BY COALESCE(score,0) DESC, commission_rate DESC, name ASC LIMIT 100").all();
+    urls.push(...(products.results || []).map((p) => `${origin}/conteudo/${slugify(p.name)}`));
   }
-  const xml = `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls.map((u) => `<url><loc>${escapeHtml(u)}</loc></url>`).join('')}</urlset>`;
+  const uniqueUrls = [...new Set(urls)];
+  const xml = `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${uniqueUrls.map((u) => `<url><loc>${escapeHtml(u)}</loc></url>`).join('')}</urlset>`;
   return new Response(xml,{headers:{'content-type':'application/xml;charset=utf-8','cache-control':'public,max-age=3600'}});
 }
