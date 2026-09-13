@@ -3,6 +3,7 @@ import { runAutonomyCycle } from './autonomy-cycle.js';
 import { handleAffiliateRedirect } from './affiliate-redirect.js';
 import { loadAffiliateStats } from './affiliate-stats.js';
 import { loadContentStats, getContent } from './content-engine.js';
+import { loadCommercialBrain } from './commercial-brain.js';
 import { handleOrganicContent, handleOrganicRobots, handleOrganicSitemap } from './organic-content.js';
 
 function json(data, status = 200) {
@@ -18,6 +19,10 @@ export default {
     }
     if (url.pathname === '/api/content/stats' && request.method === 'GET') {
       try { return json({ ok: true, stats: await loadContentStats(env) }); }
+      catch (error) { return json({ ok: false, error: error.message }, 500); }
+    }
+    if (url.pathname === '/api/commercial-brain' && request.method === 'GET') {
+      try { return json({ ok: true, brain: await loadCommercialBrain(env) }); }
       catch (error) { return json({ ok: false, error: error.message }, 500); }
     }
     if (url.pathname === '/api/content' && request.method === 'GET') {
