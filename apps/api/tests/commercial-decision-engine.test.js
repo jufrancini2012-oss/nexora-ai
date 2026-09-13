@@ -32,7 +32,7 @@ test('scales a product with verified positive performance', () => {
 test('reduces a product with verified negative performance', () => {
   const result = decideProductAction(
     { id: 'p1', score: 60 },
-    { clicks: 200, purchases: 2, commissionRevenue: 20, adSpend: 100 }
+    { clicks: 200, purchases: 3, commissionRevenue: 20, adSpend: 100 }
   );
 
   assert.equal(result.action, 'REDUCE');
@@ -56,6 +56,12 @@ test('reinvests exactly 10 percent only above one thousand net', () => {
     rate: 0.1,
     eligible: false,
     reinvestment: 0,
+    allocation: {
+      productPromotion: 0,
+      aiAndAutomation: 0,
+      cloudInfrastructure: 0,
+      githubDevelopment: 0
+    },
     retained: 1000,
     basis: 'net_revenue'
   });
