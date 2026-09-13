@@ -13,7 +13,9 @@
     const pipeline=d?.pipeline||{};
     const kpis=d?.kpis||{};
     const products=Array.isArray(d?.products)?d.products:[];
-    root.innerHTML=`<h2>Central autônoma</h2><div class="live-grid"><div><b>${Number(pipeline.researched||0)}</b><span>oportunidades pesquisadas</span></div><div><b>${Number(pipeline.selected||0)}</b><span>produtos selecionados</span></div><div><b>${Number(kpis.leadsToday||0)}</b><span>leads hoje</span></div><div><b>R$ ${Number(kpis.revenueToday||0).toFixed(2)}</b><span>vendas hoje</span></div></div><h3>Produtos priorizados pelo robô</h3>${products.length?products.map(p=>`<article class="product-card"><strong>${String(p.name||'Produto')}</strong><span>${String(p.category||'')}</span><em>Score ${Number(p.score||0)}</em></article>`).join(''):'<p class="note">Nenhum produto selecionado pela política atual.</p>'}`;
+    const selected=Array.isArray(d?.selectedProducts)?d.selectedProducts:[];
+    const hasSelected=selected.length>0;
+    root.innerHTML=`<h2>Central autônoma</h2><div class="live-grid"><div><b>${Number(pipeline.researched||0)}</b><span>oportunidades pesquisadas</span></div><div><b>${Number(pipeline.catalog||products.length||0)}</b><span>produtos cadastrados</span></div><div><b>${Number(pipeline.selected||0)}</b><span>produtos prontos para teste</span></div><div><b>R$ ${Number(kpis.revenueToday||0).toFixed(2)}</b><span>vendas hoje</span></div></div><h3>${hasSelected?'Produtos priorizados pelo robô':'Catálogo afiliado em avaliação'}</h3>${products.length?products.map(p=>`<article class="product-card"><strong>${String(p.name||'Produto')}</strong><span>${String(p.providerName||p.provider||p.category||'')}</span><em>${p.score==null?'Aguardando evidência':'Score '+Number(p.score||0)}</em></article>`).join(''):'<p class="note">Nenhum produto cadastrado no catálogo ainda.</p>'}`;
   }catch(e){
     const message=e?.name==='AbortError'?'A API demorou mais de 10 segundos para responder.':'Não foi possível carregar os dados da Central autônoma agora.';
     showError(message);
