@@ -74,7 +74,8 @@ export async function generateAutonomousContent(env, { max = MAX_DAILY_PUBLICATI
       if (exists) { skipped += 1; continue; }
       const now = new Date().toISOString();
       const id = `content_${crypto.randomUUID()}`;
-      await env.DB.prepare(`INSERT INTO content_items (id,slug,title,meta_description,body_html,content_type,product_id,source,status,score,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`).bind(id, article.slug, article.title, article.meta, article.body, 'seo_product', product.id, 'nexora_autonomous', 'published', Number(product.score || 0), now, now).run();
+      const initialScore = Number(product.score || 0);
+      await env.DB.prepare(`INSERT INTO content_items (id,slug,title,meta_description,body_html,content_type,product_id,source,status,score,base_score,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(id, article.slug, article.title, article.meta, article.body, 'seo_product', product.id, 'nexora_autonomous', 'published', initialScore, initialScore, now, now).run();
       await env.DB.prepare(`INSERT INTO content_events (id,content_id,event_type,occurred_at,metadata_json) VALUES (?,?,?,?,?)`).bind(`event_${crypto.randomUUID()}`, id, 'published', now, JSON.stringify({ productId: product.id, variant: variant.key })).run();
       newUrls.push(`${SITE_ORIGIN}/conteudo/${article.slug}`);
       created += 1; remaining -= 1;
@@ -86,20 +87,30 @@ export async function generateAutonomousContent(env, { max = MAX_DAILY_PUBLICATI
 }
 
 export async function learnFromContentPerformance(env) {
-  if (!env?.DB) return { updated: 0 };
-  const items = await env.DB.prepare(`SELECT id,slug,score FROM content_items WHERE status='published' ORDER BY created_at DESC LIMIT 200`).all();
+  if (!env?.DB) return { updated: 0, learned: [] };
+  const items = await env.DB.prepare(`SELECT id,slug,score,base_score AS baseScore,product_id AS productId FROM content_items WHERE status='published' ORDER BY created_at DESC LIMIT 200`).all();
   let updated = 0;
+  const learned = [];
   for (const item of (items.results || [])) {
     const views = Number((await env.DB.prepare("SELECT COUNT(*) AS count FROM content_events WHERE content_id=? AND event_type='viewed'").bind(item.id).first())?.count || 0);
     const clicks = Number((await env.DB.prepare("SELECT COUNT(*) AS count FROM affiliate_clicks WHERE source='organic' AND campaign=?").bind(item.slug).first())?.count || 0);
-    const rate = views ? clicks / views : 0;
-    const learnedScore = Math.min(100, Math.max(0, Number(item.score || 0) + Math.min(20, rate * 100)));
+    const verifiedConversions = Number((await env.DB.prepare(`SELECT COUNT(*) AS count FROM affiliate_conversions WHERE affiliate_product_id=? AND environment='production' AND verified=1`).bind(item.productId).first())?.count || 0);
+    const ctr = views ? clicks / views : 0;
+    const base = Number(item.baseScore ?? item.score ?? 0);
+    let adjustment = 0;
+    if (views >= 10) adjustment += Math.max(-10, Math.min(10, (ctr - 0.03) * 100));
+    if (clicks >= 3) adjustment += Math.min(6, clicks * 0.4);
+    if (verifiedConversions > 0) adjustment += Math.min(12, verifiedConversions * 4);
+    const learnedScore = Math.min(100, Math.max(0, Number((base + adjustment).toFixed(2))));
+    const signal = verifiedConversions > 0 ? 'verified_conversion' : views >= 10 ? 'content_ctr' : clicks >= 3 ? 'affiliate_clicks' : 'insufficient_evidence';
     if (Math.abs(learnedScore - Number(item.score || 0)) >= 0.1) {
-      await env.DB.prepare('UPDATE content_items SET score=?,updated_at=? WHERE id=?').bind(Number(learnedScore.toFixed(2)), new Date().toISOString(), item.id).run();
+      await env.DB.prepare('UPDATE content_items SET score=?,updated_at=? WHERE id=?').bind(learnedScore, new Date().toISOString(), item.id).run();
       updated += 1;
     }
+    learned.push({ contentId:item.id, slug:item.slug, productId:item.productId, views, clicks, verifiedConversions, ctr:Number(ctr.toFixed(4)), score:learnedScore, baseScore:base, signal });
   }
-  return { updated };
+  learned.sort((a,b) => b.score - a.score || b.verifiedConversions - a.verifiedConversions || b.clicks - a.clicks);
+  return { updated, learned };
 }
 
 export async function loadContentStats(env) {
