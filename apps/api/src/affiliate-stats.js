@@ -1,9 +1,11 @@
 export async function loadAffiliateStats(env) {
   if (!env?.DB) {
-    return { today: { clicks: 0, checkouts: 0, sales: 0, commission: 0 }, total: { clicks: 0, checkouts: 0, sales: 0, commission: 0 }, products: [], sources: [] };
+    return { today: { views: 0, clicks: 0, checkouts: 0, sales: 0, commission: 0 }, total: { views: 0, clicks: 0, checkouts: 0, sales: 0, commission: 0 }, products: [], sources: [] };
   }
 
-  const [todayClicks, totalClicks, todayCheckouts, totalCheckouts, todaySales, totalSales, todayCommission, totalCommission, products, sources] = await Promise.all([
+  const [todayViews, totalViews, todayClicks, totalClicks, todayCheckouts, totalCheckouts, todaySales, totalSales, todayCommission, totalCommission, products, sources] = await Promise.all([
+    env.DB.prepare(`SELECT COUNT(*) AS count FROM content_events WHERE event_type='viewed' AND occurred_at >= datetime('now','start of day')`).first(),
+    env.DB.prepare(`SELECT COUNT(*) AS count FROM content_events WHERE event_type='viewed'`).first(),
     env.DB.prepare(`SELECT COUNT(*) AS count FROM affiliate_clicks WHERE occurred_at >= datetime('now','start of day')`).first(),
     env.DB.prepare(`SELECT COUNT(*) AS count FROM affiliate_clicks`).first(),
     env.DB.prepare(`SELECT COUNT(*) AS count FROM commercial_orders WHERE created_at >= datetime('now','start of day')`).first(),
@@ -32,12 +34,14 @@ export async function loadAffiliateStats(env) {
 
   return {
     today: {
+      views: Number(todayViews?.count || 0),
       clicks: Number(todayClicks?.count || 0),
       checkouts: Number(todayCheckouts?.count || 0),
       sales: Number(todaySales?.count || 0),
       commission: Number(todayCommission?.amount || 0)
     },
     total: {
+      views: Number(totalViews?.count || 0),
       clicks: Number(totalClicks?.count || 0),
       checkouts: Number(totalCheckouts?.count || 0),
       sales: Number(totalSales?.count || 0),
