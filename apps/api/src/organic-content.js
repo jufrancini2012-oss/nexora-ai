@@ -4,14 +4,15 @@ function slugify(value){
   return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,90);
 }
 
-function pageShell({title,description,canonical,body}){
+function pageShell({title,description,canonical,body,schemaExtra={}}){
   const schema = JSON.stringify({
     '@context':'https://schema.org',
     '@type':'WebPage',
     name:String(title || ''),
     description:String(description || ''),
     url:String(canonical || ''),
-    isPartOf:{'@type':'WebSite',name:'NEXORA AI',url:String(canonical || '').split('/conteudo')[0].split('/ofertas')[0]}
+    isPartOf:{'@type':'WebSite',name:'NEXORA AI',url:String(canonical || '').split('/conteudo')[0].split('/ofertas')[0]},
+    ...schemaExtra
   }).replace(/<\/script/gi,'<\\/script');
   return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)}</title><meta name="description" content="${escapeHtml(description)}"><link rel="canonical" href="${escapeHtml(canonical)}"><link rel="alternate" type="application/rss+xml" title="NEXORA AI — Guias de compra" href="/feed.xml"><meta name="robots" content="index,follow"><meta property="og:title" content="${escapeHtml(title)}"><meta property="og:description" content="${escapeHtml(description)}"><meta property="og:type" content="website"><meta property="og:url" content="${escapeHtml(canonical)}"><script type="application/ld+json">${schema}</script><style>body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;max-width:900px;margin:auto;padding:24px;line-height:1.55;color:#172033}a{color:#155eef}.card,.seo-article{border:1px solid #d9dfeb;border-radius:16px;padding:20px;margin:16px 0}.cta,.btn{display:inline-block;padding:12px 18px;border-radius:10px;background:#172033;color:#fff;text-decoration:none}.muted,.note{color:#64748b}.grid{display:grid;gap:16px}@media(min-width:700px){.grid{grid-template-columns:1fr 1fr}}</style></head><body>${body}</body></html>`;
 }
@@ -28,7 +29,7 @@ function fallbackProductPage(product, origin){
   const commission = product.commissionRate == null ? null : `${(Number(product.commissionRate)*100).toFixed(0)}%`;
   const price = product.price == null ? null : Number(product.price).toLocaleString('pt-BR',{style:'currency',currency:product.currency || 'BRL'});
   const body = `<header><p><a href="/conteudo">NEXORA AI</a></p><h1>${escapeHtml(product.name)}</h1><p class="muted">Guia rápido para quem está pesquisando este produto antes de comprar.</p></header><main><div class="card"><h2>O que observar antes de comprar</h2><p>Compare preço, avaliação, disponibilidade, condições de entrega e informações do anúncio.</p>${price?`<p><strong>Preço de referência:</strong> ${escapeHtml(price)}</p>`:''}${commission?`<p class="muted">Comissão estimada: ${escapeHtml(commission)}. Isso não representa uma venda confirmada.</p>`:''}<a class="cta" rel="sponsored nofollow" href="${escapeHtml(affiliateUrl(product,'organic','seo-fallback'))}">Ver oferta no parceiro</a></div></main><footer class="muted"><p>Conteúdo informativo. Preços e condições podem mudar no parceiro.</p></footer>`;
-  return pageShell({title:`${product.name} — guia e oferta`,description:`Informações para comparar ${product.name} e consultar a oferta disponível no parceiro.`,canonical,body});
+  return pageShell({title:`${product.name} — guia e oferta`,description:`Informações para comparar ${product.name} e consultar a oferta disponível no parceiro.`,canonical,body,schemaExtra:{'@type':'Article',headline:`${product.name} — guia e oferta`,mainEntityOfPage:canonical}});
 }
 
 async function loadPublicProducts(env){
@@ -83,7 +84,7 @@ export async function handleOrganicContent(request, env){
       if(item.product_id){
         await env.DB.prepare(`INSERT INTO content_events (id,content_id,event_type,occurred_at,metadata_json) VALUES (?,?,?,?,?)`).bind(`event_${crypto.randomUUID()}`,item.id,'viewed',new Date().toISOString(),JSON.stringify({path:url.pathname})).run();
       }
-      return new Response(pageShell({title:item.title,description:item.meta_description,canonical:`${origin}/conteudo/${item.slug}`,body}),{status:200,headers:{'content-type':'text/html;charset=utf-8','cache-control':'public,max-age=300'}});
+      return new Response(pageShell({title:item.title,description:item.meta_description,canonical:`${origin}/conteudo/${item.slug}`,body,schemaExtra:{'@type':'Article',headline:item.title,description:item.meta_description,mainEntityOfPage:`${origin}/conteudo/${item.slug}`,author:{'@type':'Organization',name:'NEXORA AI'},publisher:{'@type':'Organization',name:'NEXORA AI'}}}),{status:200,headers:{'content-type':'text/html;charset=utf-8','cache-control':'public,max-age=300'}});
     }
     const result = await env.DB.prepare(`SELECT id,name,price,currency,commission_rate AS commissionRate,affiliate_url,status FROM affiliate_products WHERE status != 'blocked'`).all();
     const product = (result.results || []).find((p) => slugify(p.name) === slug);
@@ -101,14 +102,14 @@ export async function handleOrganicRobots(request){
 export async function handleOrganicSitemap(request, env){
   if(request.method !== 'GET' || new URL(request.url).pathname !== '/sitemap.xml') return null;
   const origin = new URL(request.url).origin;
-  let urls = [`${origin}/ofertas`,`${origin}/conteudo`];
+  let urls = [{loc:`${origin}/ofertas`},{loc:`${origin}/conteudo`}];
   if(env?.DB){
     const result = await env.DB.prepare("SELECT slug,updated_at FROM content_items WHERE status='published' ORDER BY created_at DESC LIMIT 500").all();
-    urls.push(...(result.results || []).map((p) => `${origin}/conteudo/${slugify(p.slug)}`));
+    urls.push(...(result.results || []).map((p) => ({loc:`${origin}/conteudo/${slugify(p.slug)}`,lastmod:p.updated_at})));
     const products = await env.DB.prepare("SELECT name FROM affiliate_products WHERE status != 'blocked' ORDER BY COALESCE(score,0) DESC, commission_rate DESC, name ASC LIMIT 100").all();
-    urls.push(...(products.results || []).map((p) => `${origin}/conteudo/${slugify(p.name)}`));
+    urls.push(...(products.results || []).map((p) => ({loc:`${origin}/conteudo/${slugify(p.name)}`})));
   }
-  const uniqueUrls = [...new Set(urls)];
-  const xml = `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${uniqueUrls.map((u) => `<url><loc>${escapeHtml(u)}</loc></url>`).join('')}</urlset>`;
+  const uniqueUrls = [...new Map(urls.map((item) => [item.loc,item])).values()];
+  const xml = `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${uniqueUrls.map((item) => `<url><loc>${escapeHtml(item.loc)}</loc>${item.lastmod?`<lastmod>${escapeHtml(item.lastmod)}</lastmod>`:''}</url>`).join('')}</urlset>`;
   return new Response(xml,{headers:{'content-type':'application/xml;charset=utf-8','cache-control':'public,max-age=3600'}});
 }
