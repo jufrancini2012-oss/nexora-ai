@@ -1,5 +1,5 @@
 import { fetchMercadoLivreTrends, searchMercadoLivreProducts, trendScores } from './mercadolivre-trends.js';
-import { calculateReinvestment, calculateVerifiedNetProfit } from './reinvestment-policy.js';
+import { calculateReinvestment, calculateVerifiedNetProfit, GROWTH_POLICY } from './reinvestment-policy.js';
 import { generateAutonomousContent, learnFromContentPerformance } from './content-engine.js';
 import { learnCommercialBrain } from './commercial-brain.js';
 import { allocateCommercialEffort } from './effort-allocation.js';
@@ -32,8 +32,6 @@ async function persistAffiliateCatalogOpportunities(env, observedAt) {
   let count = 0;
   for (const row of result.results || []) {
     const commissionRate = row.commission_rate == null ? null : Number(row.commission_rate);
-    // The affiliate product's learned score is the authoritative score for
-    // catalog items. Never let an older zero/low opportunity snapshot erase it.
     const productScore = Number(row.product_score ?? 0);
     const opportunityScore = Number(row.opportunity_score ?? 0);
     const score = Math.max(productScore, opportunityScore);
@@ -177,13 +175,17 @@ export async function runAutonomyCycle(env, options = {}) {
         WHERE occurred_at >= ? AND occurred_at < ?`).bind(`${day}T00:00:00.000Z`, `${day}T23:59:59.999Z`).all();
       const netProfit = calculateVerifiedNetProfit(entries.results || []);
       const decision = calculateReinvestment(netProfit);
-      growth = { ...decision, businessDate: day, environment: 'production' };
+      growth = { ...decision, businessDate: day, environment: 'production', policy: {
+        thresholdNetProfit: GROWTH_POLICY.thresholdNetProfit,
+        rate: GROWTH_POLICY.rate,
+        basis: GROWTH_POLICY.basis
+      } };
       await env.DB.prepare(`INSERT INTO growth_budgets
         (id,business_date,net_profit,threshold,reinvestment_rate,reserved_amount,status,environment,created_at,updated_at)
         VALUES (?,?,?,?,?,?,?,?,?,?)
         ON CONFLICT(business_date) DO UPDATE SET net_profit=excluded.net_profit,
         reserved_amount=excluded.reserved_amount,status=excluded.status,updated_at=excluded.updated_at`)
-        .bind(`growth_${day}`, day, netProfit, 500, 0.10, decision.reservedAmount,
+        .bind(`growth_${day}`, day, netProfit, GROWTH_POLICY.thresholdNetProfit, GROWTH_POLICY.rate, decision.reservedAmount,
           decision.eligible ? 'reserved' : 'not_eligible', 'production', startedAt, new Date().toISOString()).run();
     }
 
