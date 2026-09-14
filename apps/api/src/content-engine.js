@@ -1,4 +1,7 @@
 const MAX_DAILY_PUBLICATIONS = 5;
+const SITE_ORIGIN = 'https://nexora-ai.ju-francini2012.workers.dev';
+const INDEXNOW_KEY = '9f3c1a7e2b6d4f81a0c5e8d7b9f2c614';
+const INDEXNOW_KEY_LOCATION = `${SITE_ORIGIN}/nexora-ai-indexnow-9f3c1a7e2b6d4f81a0c5e8d7b9f2c614.txt`;
 const CONTENT_VARIANTS = [
   { key: 'vale-a-pena', label: 'vale a pena', heading: 'Vale a pena considerar esta oferta?', intro: 'Este guia ajuda a decidir se a oferta faz sentido para o seu perfil, sem depender apenas de preço ou de uma recomendação automática.' },
   { key: 'como-escolher', label: 'como escolher', heading: 'Como escolher melhor antes de comprar', intro: 'Antes de comprar, vale comparar os principais critérios que podem mudar o custo-benefício e a experiência de uso.' },
@@ -39,6 +42,21 @@ async function candidates(env, priorityProductIds = []) {
   });
 }
 
+async function notifyIndexNow(urls = []) {
+  const uniqueUrls = [...new Set(urls.filter(Boolean))].slice(0, 10000);
+  if (!uniqueUrls.length) return { submitted: 0, ok: false, reason: 'NO_URLS' };
+  try {
+    const response = await fetch('https://api.indexnow.org/indexnow', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json; charset=utf-8' },
+      body: JSON.stringify({ host: new URL(SITE_ORIGIN).host, key: INDEXNOW_KEY, keyLocation: INDEXNOW_KEY_LOCATION, urlList: uniqueUrls })
+    });
+    return { submitted: uniqueUrls.length, ok: response.ok, status: response.status };
+  } catch (error) {
+    return { submitted: 0, ok: false, reason: error.message };
+  }
+}
+
 export async function generateAutonomousContent(env, { max = MAX_DAILY_PUBLICATIONS, priorityProductIds = [] } = {}) {
   if (!env?.DB) return { created: 0, skipped: 0, reason: 'D1_NOT_CONFIGURED' };
   const today = new Date().toISOString().slice(0, 10);
@@ -47,6 +65,7 @@ export async function generateAutonomousContent(env, { max = MAX_DAILY_PUBLICATI
   if (!remaining) return { created: 0, skipped: 0, reason: 'DAILY_LIMIT_REACHED' };
   const products = await candidates(env, priorityProductIds);
   let created = 0, skipped = 0;
+  const newUrls = [];
   for (const product of products) {
     for (const variant of CONTENT_VARIANTS) {
       if (!remaining) break;
@@ -57,11 +76,13 @@ export async function generateAutonomousContent(env, { max = MAX_DAILY_PUBLICATI
       const id = `content_${crypto.randomUUID()}`;
       await env.DB.prepare(`INSERT INTO content_items (id,slug,title,meta_description,body_html,content_type,product_id,source,status,score,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`).bind(id, article.slug, article.title, article.meta, article.body, 'seo_product', product.id, 'nexora_autonomous', 'published', Number(product.score || 0), now, now).run();
       await env.DB.prepare(`INSERT INTO content_events (id,content_id,event_type,occurred_at,metadata_json) VALUES (?,?,?,?,?)`).bind(`event_${crypto.randomUUID()}`, id, 'published', now, JSON.stringify({ productId: product.id, variant: variant.key })).run();
+      newUrls.push(`${SITE_ORIGIN}/conteudo/${article.slug}`);
       created += 1; remaining -= 1;
     }
     if (!remaining) break;
   }
-  return { created, skipped, remaining, variants: CONTENT_VARIANTS.map((v) => v.key), prioritized: priorityProductIds.slice(0, MAX_DAILY_PUBLICATIONS) };
+  const indexing = await notifyIndexNow(newUrls);
+  return { created, skipped, remaining, variants: CONTENT_VARIANTS.map((v) => v.key), prioritized: priorityProductIds.slice(0, MAX_DAILY_PUBLICATIONS), indexing };
 }
 
 export async function learnFromContentPerformance(env) {
