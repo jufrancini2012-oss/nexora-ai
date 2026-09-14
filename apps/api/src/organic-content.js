@@ -80,7 +80,10 @@ export async function handleOrganicContent(request, env){
   if(env?.DB){
     const item = await env.DB.prepare("SELECT * FROM content_items WHERE slug=? AND status='published' LIMIT 1").bind(slug).first();
     if(item){
-      const body = `<header><p><a href="/conteudo">← Todos os guias</a></p><h1>${escapeHtml(item.title)}</h1><p class="muted">Atualizado automaticamente pelo NEXORA AI.</p></header><main>${item.body_html}</main><footer class="muted"><p>Conteúdo informativo. Confirme preço, vendedor, avaliações, frete e condições diretamente no parceiro.</p><p><a href="/ofertas">Ver ofertas em destaque</a></p></footer>`;
+      const relatedResult = await env.DB.prepare("SELECT slug,title,meta_description FROM content_items WHERE status='published' AND slug != ? ORDER BY created_at DESC LIMIT 4").bind(item.slug).all();
+      const related = (relatedResult.results || []).map((p) => `<li><a href="/conteudo/${escapeHtml(p.slug)}">${escapeHtml(p.title)}</a>${p.meta_description?`<span class="muted"> — ${escapeHtml(p.meta_description)}</span>`:''}</li>`).join('');
+      const relatedSection = related ? `<section class="card"><h2>Você também pode gostar</h2><ul>${related}</ul><p><a href="/ofertas">Ver todas as ofertas em destaque</a></p></section>` : `<section class="card"><h2>Continue pesquisando</h2><p><a href="/conteudo">Ver mais guias de compra</a> ou <a href="/ofertas">ver ofertas em destaque</a>.</p></section>`;
+      const body = `<header><p><a href="/conteudo">← Todos os guias</a></p><h1>${escapeHtml(item.title)}</h1><p class="muted">Atualizado automaticamente pelo NEXORA AI.</p></header><main>${item.body_html}${relatedSection}</main><footer class="muted"><p>Conteúdo informativo. Confirme preço, vendedor, avaliações, frete e condições diretamente no parceiro.</p><p><a href="/ofertas">Ver ofertas em destaque</a></p></footer>`;
       if(item.product_id){
         await env.DB.prepare(`INSERT INTO content_events (id,content_id,event_type,occurred_at,metadata_json) VALUES (?,?,?,?,?)`).bind(`event_${crypto.randomUUID()}`,item.id,'viewed',new Date().toISOString(),JSON.stringify({path:url.pathname})).run();
       }
