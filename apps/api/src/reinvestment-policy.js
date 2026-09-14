@@ -1,5 +1,5 @@
 export const GROWTH_POLICY = Object.freeze({
-  thresholdNetProfit: 1000,
+  thresholdNetProfit: 500,
   rate: 0.10,
   basis: 'verified_net_profit',
   currency: 'BRL'
