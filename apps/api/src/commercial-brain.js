@@ -34,7 +34,7 @@ export async function learnCommercialBrain(env) {
       SELECT COUNT(*) AS count
       FROM content_events ce
       JOIN content_items ci ON ci.id = ce.content_id
-      WHERE ci.product_id = ? AND ce.event_type = 'viewed'
+      WHERE ci.product_id = ? AND ce.event_type = 'view'
     `).bind(product.id).first();
 
     const clicksRow = await env.DB.prepare(`
@@ -56,7 +56,7 @@ export async function learnCommercialBrain(env) {
     const commissionRate = Number(product.commissionRate || 0);
     const commissionAmount = Number(product.commissionAmount || 0);
 
-    // Start from an immutable baseline so repeated 15-minute cycles never inflate scores by themselves.
+    // Start from an immutable baseline so repeated cycles never inflate scores by themselves.
     const base = Number(product.baseScore ?? product.score ?? 50);
     let adjustment = priorityBonus(evidence) + Math.min(10, commissionRate * 25);
 
