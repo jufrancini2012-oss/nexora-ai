@@ -56,7 +56,7 @@ export async function handleOrganicContent(request, env){
 
   if(url.pathname === '/ofertas' || url.pathname === '/ofertas/'){
     const products = await loadPublicProducts(env);
-    return new Response(offerHubPage(products,origin),{status:200,headers:{'content-type':'text/html;charset=utf-8','cache-control':'public,max-age=300'}});
+    return new Response(offerHubPage(products, origin),{status:200,headers:{'content-type':'text/html;charset=utf-8','cache-control':'public,max-age=300'}});
   }
 
   if(!url.pathname.startsWith('/conteudo')) return null;
@@ -85,7 +85,7 @@ export async function handleOrganicContent(request, env){
       const relatedSection = related ? `<section class="card"><h2>Você também pode gostar</h2><ul>${related}</ul><p><a href="/ofertas">Ver todas as ofertas em destaque</a></p></section>` : `<section class="card"><h2>Continue pesquisando</h2><p><a href="/conteudo">Ver mais guias de compra</a> ou <a href="/ofertas">ver ofertas em destaque</a>.</p></section>`;
       const body = `<header><p><a href="/conteudo">← Todos os guias</a></p><h1>${escapeHtml(item.title)}</h1><p class="muted">Atualizado automaticamente pelo NEXORA AI.</p></header><main>${item.body_html}${relatedSection}</main><footer class="muted"><p>Conteúdo informativo. Confirme preço, vendedor, avaliações, frete e condições diretamente no parceiro.</p><p><a href="/ofertas">Ver ofertas em destaque</a></p></footer>`;
       if(item.product_id){
-        await env.DB.prepare(`INSERT INTO content_events (id,content_id,event_type,occurred_at,metadata_json) VALUES (?,?,?,?,?)`).bind(`event_${crypto.randomUUID()}`,item.id,'viewed',new Date().toISOString(),JSON.stringify({path:url.pathname})).run();
+        await env.DB.prepare(`INSERT INTO content_events (id,content_id,event_type,occurred_at,metadata_json) VALUES (?,?,?,?,?)`).bind(`event_${crypto.randomUUID()}`,item.id,'view',new Date().toISOString(),JSON.stringify({path:url.pathname})).run();
       }
       return new Response(pageShell({title:item.title,description:item.meta_description,canonical:`${origin}/conteudo/${item.slug}`,body,schemaExtra:{'@type':'Article',headline:item.title,description:item.meta_description,mainEntityOfPage:`${origin}/conteudo/${item.slug}`,author:{'@type':'Organization',name:'NEXORA AI'},publisher:{'@type':'Organization',name:'NEXORA AI'}}}),{status:200,headers:{'content-type':'text/html;charset=utf-8','cache-control':'public,max-age=300'}});
     }
