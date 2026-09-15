@@ -8,27 +8,18 @@ import { loadEffortAllocation } from './effort-allocation.js';
 import { buildGrowthQueue, loadGrowthEngine, markGrowthTask } from './growth-engine.js';
 import { handleOrganicContent, handleOrganicRobots, handleOrganicSitemap } from './organic-content.js';
 
-function json(data, status = 200) {
-  return new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'access-control-allow-origin': '*' } });
-}
-
+function json(data, status = 200) { return new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'access-control-allow-origin': '*' } }); }
 function xmlEscape(value = '') { return String(value).replace(/[&<>\"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;' }[c])); }
 
 async function loadDistribution(env) {
   if (!env?.DB) return { stats: { published: 0, publishedToday: 0, events: 0, clicks: 0, organicClicks: 0 }, items: [] };
-  const [content, clicks, organicClicks, items] = await Promise.all([
-    loadContentStats(env),
-    env.DB.prepare('SELECT COUNT(*) AS count FROM affiliate_clicks').first(),
-    env.DB.prepare("SELECT COUNT(*) AS count FROM affiliate_clicks WHERE source='organic'").first(),
-    env.DB.prepare("SELECT slug,title,created_at FROM content_items WHERE status='published' ORDER BY created_at DESC LIMIT 5").all()
-  ]);
+  const [content, clicks, organicClicks, items] = await Promise.all([loadContentStats(env), env.DB.prepare('SELECT COUNT(*) AS count FROM affiliate_clicks').first(), env.DB.prepare("SELECT COUNT(*) AS count FROM affiliate_clicks WHERE source='organic'").first(), env.DB.prepare("SELECT slug,title,created_at FROM content_items WHERE status='published' ORDER BY created_at DESC LIMIT 5").all()]);
   return { stats: { ...content, clicks: Number(clicks?.count || 0), organicClicks: Number(organicClicks?.count || 0) }, items: (items.results || []).map((item) => ({ ...item })) };
 }
 
 async function handleOrganicFeed(request, env) {
   if (request.method !== 'GET' || new URL(request.url).pathname !== '/feed.xml') return null;
-  const url = new URL(request.url);
-  let items = [];
+  const url = new URL(request.url); let items = [];
   if (env?.DB) { const result = await env.DB.prepare("SELECT slug,title,meta_description,created_at FROM content_items WHERE status='published' ORDER BY created_at DESC LIMIT 30").all(); items = result.results || []; }
   const entries = items.map((item) => { const link = `${url.origin}/conteudo/${encodeURIComponent(item.slug)}`; return `<item><title>${xmlEscape(item.title)}</title><link>${xmlEscape(link)}</link><guid isPermaLink="true">${xmlEscape(link)}</guid><description>${xmlEscape(item.meta_description || '')}</description><pubDate>${new Date(item.created_at || Date.now()).toUTCString()}</pubDate></item>`; }).join('');
   const xml = `<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel><title>NEXORA AI — Guias de compra</title><link>${xmlEscape(`${url.origin}/conteudo`)}</link><description>Novos guias de compra publicados pelo motor autônomo da NEXORA AI.</description>${entries}</channel></rss>`;
@@ -55,6 +46,9 @@ export default {
     return app.fetch(request, env, ctx);
   },
   async scheduled(controller, env, ctx) {
-    ctx.waitUntil(runAutonomyCycle(env, { trigger: `cron:${controller.cron}` }).catch((error) => console.error('NEXORA_AUTONOMY_CYCLE_FAILED', error.message)));
+    ctx.waitUntil((async () => {
+      try { await buildGrowthQueue(env, { max: 8 }); } catch (error) { console.error('NEXORA_GROWTH_QUEUE_FAILED', error.message); }
+      try { await runAutonomyCycle(env, { trigger: `cron:${controller.cron}` }); } catch (error) { console.error('NEXORA_AUTONOMY_CYCLE_FAILED', error.message); }
+    })());
   }
 };
