@@ -4,6 +4,7 @@ import { selectCommercialProducts, buildOffer, createOrder, metricsFromGateway }
 import { fetchMercadoLivreTrends, trendScores } from './mercadolivre-trends.js';
 import { getContent, loadContentStats } from './content-engine.js';
 import { handleAffiliateRedirect } from './affiliate-redirect.js';
+import { ensureAffiliateCatalog } from './affiliate-catalog.js';
 
 const policy = {
   autonomyEnabled: true,
@@ -106,6 +107,10 @@ function escapeHtml(value=''){return String(value).replace(/[&<>\"]/g,(c)=>({'&'
 async function route(request,env){
   if(request.method==='OPTIONS')return new Response(null,{status:204});
   const url=new URL(request.url),path=url.pathname;
+
+  if(env?.DB && (path==='/api/dashboard'||path==='/api/products'||path==='/api/autonomy'||path.startsWith('/api/commercial/')||path.startsWith('/oferta/'))){
+    await ensureAffiliateCatalog(env);
+  }
 
   if(path==='/go') return handleAffiliateRedirect(request,env);
   if(path.startsWith('/oferta/')) return offerPage(env,decodeURIComponent(path.slice('/oferta/'.length)));
