@@ -85,7 +85,18 @@ export async function buildGrowthQueue(env, { max = MAX_QUEUE_PER_CYCLE } = {}) 
 }
 
 export async function loadGrowthEngine(env) {
-  if (!await ensureTables(env)) return { enabled: false, planned: 0, ready: 0, completed: 0, channels: [] };
+  if (!await ensureTables(env)) return { enabled: false, planned: 0, ready: 0, completed: 0, channels: [], queueBootstrap: false };
+
+  let bootstrap = { planned: 0, queue: [] };
+  const existing = await env.DB.prepare(`SELECT COUNT(*) AS count FROM acquisition_queue WHERE status IN ('planned','ready')`).first();
+  if (safeNumber(existing?.count) === 0) {
+    try {
+      bootstrap = await buildGrowthQueue(env, { max: MAX_QUEUE_PER_CYCLE });
+    } catch (_) {
+      bootstrap = { planned: 0, queue: [] };
+    }
+  }
+
   const [planned, ready, completed, channels] = await Promise.all([
     env.DB.prepare("SELECT COUNT(*) AS count FROM acquisition_queue WHERE status='planned'").first(),
     env.DB.prepare("SELECT COUNT(*) AS count FROM acquisition_queue WHERE status='ready'").first(),
@@ -97,6 +108,7 @@ export async function loadGrowthEngine(env) {
     planned: safeNumber(planned?.count),
     ready: safeNumber(ready?.count),
     completed: safeNumber(completed?.count),
+    queueBootstrap: bootstrap.planned > 0,
     channels: (channels.results || []).map(row => ({ channel: row.channel, tasks: safeNumber(row.count) }))
   };
 }
