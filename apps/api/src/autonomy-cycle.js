@@ -3,6 +3,7 @@ import { calculateReinvestment, calculateVerifiedNetProfit, GROWTH_POLICY } from
 import { generateAutonomousContent, learnFromContentPerformance } from './content-engine.js';
 import { learnCommercialBrain } from './commercial-brain.js';
 import { allocateCommercialEffort } from './effort-allocation.js';
+import { summarizeOfferOutcome, applyLearning } from './learning-engine.js';
 
 const FALLBACK_RESEARCH_LIMIT = 5;
 const MAX_AUTONOMOUS_CONTENT_PER_CYCLE = 5;
@@ -64,6 +65,63 @@ async function persistAffiliateCatalogOpportunities(env, observedAt) {
     count += 1;
   }
   return count;
+}
+
+async function learnAffiliateCatalogPerformance(env) {
+  if (!env?.DB) return { updated: 0, products: [] };
+
+  const products = await env.DB.prepare(`SELECT id,score,evidence_json FROM affiliate_products WHERE status != 'blocked'`).all();
+  let updated = 0;
+  const learnedProducts = [];
+
+  for (const product of products.results || []) {
+    const productId = product.id;
+    const evidence = product.evidence_json ? JSON.parse(product.evidence_json) : {};
+    const baseScore = Number.isFinite(Number(evidence.learningBaseScore))
+      ? Number(evidence.learningBaseScore)
+      : Number(product.score || 0);
+
+    const [clicks, visits, sales, commission, reversals] = await Promise.all([
+      env.DB.prepare(`SELECT COUNT(*) AS count FROM affiliate_clicks WHERE affiliate_product_id=?`).bind(productId).first(),
+      env.DB.prepare(`SELECT COUNT(*) AS count FROM content_events ce JOIN content_items ci ON ci.id=ce.content_id WHERE ci.product_id=? AND ce.event_type='view'`).bind(productId).first(),
+      env.DB.prepare(`SELECT COUNT(*) AS count, COALESCE(SUM(amount),0) AS revenue FROM affiliate_conversions WHERE affiliate_product_id=? AND verified=1 AND environment='production' AND status NOT IN ('refunded','chargeback')`).bind(productId).first(),
+      env.DB.prepare(`SELECT COALESCE(SUM(ac.amount),0) AS commission FROM affiliate_commissions ac JOIN affiliate_conversions cv ON cv.id=ac.conversion_id WHERE cv.affiliate_product_id=? AND cv.verified=1 AND cv.environment='production' AND ac.verified=1 AND ac.environment='production' AND ac.status NOT IN ('refunded','chargeback')`).bind(productId).first(),
+      env.DB.prepare(`SELECT SUM(CASE WHEN status='refunded' THEN 1 ELSE 0 END) AS refunds, SUM(CASE WHEN status='chargeback' THEN 1 ELSE 0 END) AS chargebacks FROM affiliate_conversions WHERE affiliate_product_id=? AND verified=1 AND environment='production'`).bind(productId).first()
+    ]);
+
+    const outcome = summarizeOfferOutcome({
+      visits: Number(visits?.count || 0),
+      clicks: Number(clicks?.count || 0),
+      checkouts: 0,
+      leads: 0,
+      sales: Number(sales?.count || 0),
+      revenue: Number(sales?.revenue || 0),
+      commission: Number(commission?.commission || 0),
+      refunds: Number(reversals?.refunds || 0),
+      chargebacks: Number(reversals?.chargebacks || 0)
+    });
+
+    const learning = applyLearning(baseScore, outcome);
+    const nextEvidence = {
+      ...evidence,
+      learningBaseScore: baseScore,
+      learning: {
+        ...learning,
+        outcome,
+        updatedAt: new Date().toISOString()
+      }
+    };
+
+    if (Number(product.score || 0) !== learning.learnedScore || !evidence.learning) {
+      await env.DB.prepare(`UPDATE affiliate_products SET score=?, evidence_json=? WHERE id=?`)
+        .bind(learning.learnedScore, JSON.stringify(nextEvidence), productId).run();
+      updated += 1;
+    }
+
+    learnedProducts.push({ id: productId, baseScore, ...learning, outcome });
+  }
+
+  return { updated, products: learnedProducts };
 }
 
 async function persistProductCandidate(env, product, sourceKeyword, trendRank, observedAt) {
@@ -153,19 +211,18 @@ export async function runAutonomyCycle(env, options = {}) {
       }
 
       await persistAffiliateCatalogOpportunities(env, observedAt);
-
-      selectedCount = Number((await env.DB.prepare(`SELECT COUNT(*) AS count FROM commercial_opportunities
-        WHERE score >= 80 AND status IN (?,?)`).bind('observe','candidate').first())?.count || 0);
     }
 
     if (env?.DB) {
+      learning = await learnAffiliateCatalogPerformance(env);
       brain = await learnCommercialBrain(env);
       allocation = await allocateCommercialEffort(env, { maxSlots: 3 });
-      learning = await learnFromContentPerformance(env);
+      const contentLearning = await learnFromContentPerformance(env);
       content = await generateAutonomousContent(env, {
         max: MAX_AUTONOMOUS_CONTENT_PER_CYCLE,
         priorityProductIds: allocation.slots.map(slot => slot.productId)
       });
+      learning = { ...learning, content: contentLearning };
     }
 
     let growth = null;
