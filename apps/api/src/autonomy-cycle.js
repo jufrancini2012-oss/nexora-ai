@@ -70,16 +70,22 @@ async function persistAffiliateCatalogOpportunities(env, observedAt) {
 async function learnAffiliateCatalogPerformance(env) {
   if (!env?.DB) return { updated: 0, products: [] };
 
-  const products = await env.DB.prepare(`SELECT id,score,evidence_json FROM affiliate_products WHERE status != 'blocked'`).all();
+  // O baseline é imutável durante o aprendizado. Isso impede que os ajustes
+  // acumulados sejam aplicados novamente sobre um score já aprendido.
+  const products = await env.DB.prepare(`SELECT id,score,base_score AS baseScore,evidence_json FROM affiliate_products WHERE status != 'blocked'`).all();
   let updated = 0;
   const learnedProducts = [];
 
   for (const product of products.results || []) {
     const productId = product.id;
     const evidence = product.evidence_json ? JSON.parse(product.evidence_json) : {};
-    const baseScore = Number.isFinite(Number(evidence.learningBaseScore))
-      ? Number(evidence.learningBaseScore)
-      : Number(product.score || 0);
+    const persistedBaseScore = Number(product.baseScore);
+    const evidenceBaseScore = Number(evidence.learningBaseScore);
+    const baseScore = Number.isFinite(persistedBaseScore)
+      ? persistedBaseScore
+      : Number.isFinite(evidenceBaseScore)
+        ? evidenceBaseScore
+        : Number(product.score || 0);
 
     const [clicks, visits, sales, commission, reversals] = await Promise.all([
       env.DB.prepare(`SELECT COUNT(*) AS count FROM affiliate_clicks WHERE affiliate_product_id=?`).bind(productId).first(),
@@ -112,9 +118,9 @@ async function learnAffiliateCatalogPerformance(env) {
       }
     };
 
-    if (Number(product.score || 0) !== learning.learnedScore || !evidence.learning) {
-      await env.DB.prepare(`UPDATE affiliate_products SET score=?, evidence_json=? WHERE id=?`)
-        .bind(learning.learnedScore, JSON.stringify(nextEvidence), productId).run();
+    if (Number(product.score || 0) !== learning.learnedScore || !evidence.learning || !Number.isFinite(persistedBaseScore)) {
+      await env.DB.prepare(`UPDATE affiliate_products SET score=?,base_score=?,evidence_json=? WHERE id=?`)
+        .bind(learning.learnedScore, baseScore, JSON.stringify(nextEvidence), productId).run();
       updated += 1;
     }
 
