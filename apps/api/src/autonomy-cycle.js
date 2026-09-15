@@ -215,6 +215,8 @@ export async function runAutonomyCycle(env, options = {}) {
 
     if (env?.DB) {
       learning = await learnAffiliateCatalogPerformance(env);
+      const learnedOpportunityCount = Number((await env.DB.prepare(`SELECT COUNT(*) AS count FROM commercial_opportunities WHERE score >= 80 AND status IN (?,?)`).bind('observe','candidate').first())?.count || 0);
+      selectedCount = learnedOpportunityCount;
       brain = await learnCommercialBrain(env);
       allocation = await allocateCommercialEffort(env, { maxSlots: 3 });
       const contentLearning = await learnFromContentPerformance(env);
