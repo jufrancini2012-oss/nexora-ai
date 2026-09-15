@@ -1,27 +1,30 @@
-const MAX_SLOTS = 3;
-const EXPLOITATION_WEIGHT = 0.80;
-const EXPLORATION_WEIGHT = 0.20;
+const MAX_SLOTS = 4;
+const EXPLOITATION_WEIGHT = 0.70;
+const EXPLORATION_WEIGHT = 0.30;
 
 function allocationScore(product) {
   const score = Number(product.score ?? product.baseScore ?? 50);
   const commission = Number(product.commissionRate || 0) * 100;
   const ctr = Number(product.ctr || 0) * 100;
   const clicks = Math.min(10, Number(product.clicks || 0));
-  const evidenceBonus = product.signal === 'insufficient_evidence' ? 4 : 0;
-  return Math.max(0, Math.min(100, score * 0.60 + commission * 0.15 + ctr * 0.15 + clicks * 0.60 + evidenceBonus));
+  const verified = Math.min(5, Number(product.verifiedConversions || 0));
+  const evidenceBonus = product.signal === 'insufficient_evidence' ? 5 : 0;
+  return Math.max(0, Math.min(100,
+    score * 0.50 + commission * 0.12 + ctr * 0.20 + clicks * 0.35 + verified * 4 + evidenceBonus
+  ));
 }
 
 function reasonFor(product, rank) {
-  if (rank === 3 && product.signal === 'insufficient_evidence') return 'exploração controlada de novo candidato enquanto acumula evidência';
   if (product.signal === 'verified_conversion') return 'prioridade por conversão verificada';
   if (product.signal === 'content_ctr') return 'prioridade por resposta do conteúdo';
   if (product.signal === 'affiliate_clicks') return 'prioridade por interesse em cliques';
+  if (rank >= 4) return 'exploração controlada para descobrir nova oportunidade';
   return 'exploração controlada enquanto acumula evidência';
 }
 
 function targetWeight(rank, slotCount) {
-  if (slotCount < 3) return null;
-  if (rank <= 2) return EXPLOITATION_WEIGHT / 2;
+  if (slotCount < 4) return null;
+  if (rank <= 3) return EXPLOITATION_WEIGHT / 3;
   return EXPLORATION_WEIGHT;
 }
 
@@ -34,13 +37,13 @@ export async function allocateCommercialEffort(env, { maxSlots = MAX_SLOTS } = {
   for (const row of (rows.results || [])) {
     const views = Number((await env.DB.prepare(`SELECT COUNT(*) AS count FROM content_events ce JOIN content_items ci ON ci.id=ce.content_id WHERE ci.product_id=? AND ce.event_type='view'`).bind(row.id).first())?.count || 0);
     const clicks = Number((await env.DB.prepare(`SELECT COUNT(*) AS count FROM affiliate_clicks WHERE affiliate_product_id=?`).bind(row.id).first())?.count || 0);
-    const verified = Number((await env.DB.prepare(`SELECT COUNT(*) AS count FROM affiliate_conversions WHERE affiliate_product_id=? AND environment='production' AND verified=1`).bind(row.id).first())?.count || 0);
+    const verified = Number((await env.DB.prepare(`SELECT COUNT(*) AS count FROM affiliate_conversions WHERE affiliate_product_id=? AND environment='production' AND verified=1 AND status NOT IN ('refunded','chargeback')`).bind(row.id).first())?.count || 0);
     const ctr = views ? clicks / views : 0;
-    const signal = verified >= 1 ? 'verified_conversion' : ctr > 0 ? 'content_ctr' : clicks > 0 ? 'affiliate_clicks' : 'insufficient_evidence';
+    const signal = verified >= 1 ? 'verified_conversion' : ctr >= 0.03 ? 'content_ctr' : clicks > 0 ? 'affiliate_clicks' : 'insufficient_evidence';
     const enriched = { ...row, views, clicks, verifiedConversions: verified, ctr, signal };
     products.push({ ...enriched, allocationScore: allocationScore(enriched) });
   }
-  products.sort((a,b) => b.allocationScore - a.allocationScore || b.commissionRate - a.commissionRate || a.name.localeCompare(b.name));
+  products.sort((a,b) => b.allocationScore - a.allocationScore || b.verifiedConversions - a.verifiedConversions || b.commissionRate - a.commissionRate || a.name.localeCompare(b.name));
   const slots = products.slice(0, Math.max(1, Math.min(MAX_SLOTS, Number(maxSlots))));
   const total = slots.reduce((sum, p) => sum + Math.max(0.01, p.allocationScore), 0);
   const now = new Date().toISOString();
@@ -64,17 +67,11 @@ export async function allocateCommercialEffort(env, { maxSlots = MAX_SLOTS } = {
       const proportional = p.allocationScore / total;
       const weight = targetWeight(rank, slots.length) ?? proportional;
       return {
-        productId:p.id,
-        name:p.name,
-        rank,
+        productId:p.id,name:p.name,rank,
         allocationScore:Number(p.allocationScore.toFixed(2)),
         slotWeight:Number(weight.toFixed(4)),
-        role: rank <= 2 ? 'exploitation' : 'exploration',
-        reason:reasonFor(p, rank),
-        signal:p.signal,
-        views:p.views,
-        clicks:p.clicks,
-        verifiedConversions:p.verifiedConversions
+        role: rank <= 3 ? 'exploitation' : 'exploration',
+        reason:reasonFor(p, rank),signal:p.signal,views:p.views,clicks:p.clicks,verifiedConversions:p.verifiedConversions
       };
     }),
     policy: { exploitationWeight: EXPLOITATION_WEIGHT, explorationWeight: EXPLORATION_WEIGHT },
