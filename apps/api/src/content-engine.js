@@ -96,9 +96,9 @@ export async function learnFromContentPerformance(env) {
   let updated = 0;
   const learned = [];
   for (const item of (items.results || [])) {
-    const views = Number((await env.DB.prepare("SELECT COUNT(*) AS count FROM content_events WHERE content_id=? AND event_type='viewed'").bind(item.id).first())?.count || 0);
+    const views = Number((await env.DB.prepare("SELECT COUNT(*) AS count FROM content_events WHERE content_id=? AND event_type='view'").bind(item.id).first())?.count || 0);
     const clicks = Number((await env.DB.prepare("SELECT COUNT(*) AS count FROM affiliate_clicks WHERE source='organic' AND campaign=?").bind(item.slug).first())?.count || 0);
-    const verifiedConversions = Number((await env.DB.prepare(`SELECT COUNT(*) AS count FROM affiliate_conversions WHERE affiliate_product_id=? AND environment='production' AND verified=1`).bind(item.productId).first())?.count || 0);
+    const verifiedConversions = Number((await env.DB.prepare(`SELECT COUNT(*) AS count FROM affiliate_conversions WHERE affiliate_product_id=? AND environment='production' AND verified=1 AND status NOT IN ('refunded','chargeback')`).bind(item.productId).first())?.count || 0);
     const ctr = views ? clicks / views : 0;
     const base = Number(item.baseScore ?? item.score ?? 0);
     let adjustment = 0;
