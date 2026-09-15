@@ -32,7 +32,7 @@ export async function allocateCommercialEffort(env, { maxSlots = MAX_SLOTS } = {
     ORDER BY COALESCE(score,base_score,50) DESC, COALESCE(commission_rate,0) DESC, name ASC LIMIT 200`).all();
   const products = [];
   for (const row of (rows.results || [])) {
-    const views = Number((await env.DB.prepare(`SELECT COUNT(*) AS count FROM content_events ce JOIN content_items ci ON ci.id=ce.content_id WHERE ci.product_id=? AND ce.event_type='viewed'`).bind(row.id).first())?.count || 0);
+    const views = Number((await env.DB.prepare(`SELECT COUNT(*) AS count FROM content_events ce JOIN content_items ci ON ci.id=ce.content_id WHERE ci.product_id=? AND ce.event_type='view'`).bind(row.id).first())?.count || 0);
     const clicks = Number((await env.DB.prepare(`SELECT COUNT(*) AS count FROM affiliate_clicks WHERE affiliate_product_id=?`).bind(row.id).first())?.count || 0);
     const verified = Number((await env.DB.prepare(`SELECT COUNT(*) AS count FROM affiliate_conversions WHERE affiliate_product_id=? AND environment='production' AND verified=1`).bind(row.id).first())?.count || 0);
     const ctr = views ? clicks / views : 0;
