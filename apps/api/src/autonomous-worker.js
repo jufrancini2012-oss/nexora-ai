@@ -7,6 +7,7 @@ import { loadCommercialBrain } from './commercial-brain.js';
 import { loadEffortAllocation } from './effort-allocation.js';
 import { buildGrowthQueue, executeReadyGrowthTasks, loadGrowthEngine, markGrowthTask } from './growth-engine.js';
 import { handleOrganicContent, handleOrganicRobots, handleOrganicSitemap } from './organic-content.js';
+import { handleServiceOrganic } from './service-organic.js';
 import { createServiceLead, loadServiceLeadStats } from './service-leads.js';
 
 function json(data, status = 200) { return new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'access-control-allow-origin': '*' } }); }
@@ -41,6 +42,7 @@ export default {
     if (url.pathname === '/api/services/request' && request.method === 'POST') { try { const body = await request.json(); return json({ ok: true, lead: await createServiceLead(env, body, request.url) }, 201); } catch (error) { const status = ['SERVICE_LEAD_REQUIRED','SERVICE_LEAD_LANGUAGE','SERVICE_LEAD_CURRENCY'].includes(error.message) ? 400 : 500; return json({ ok: false, error: error.message }, status); } }
     if (url.pathname === '/api/services/stats' && request.method === 'GET') { try { return json({ ok: true, stats: await loadServiceLeadStats(env) }); } catch (error) { return json({ ok: false, error: error.message }, 500); } }
     if (url.pathname === '/api/content' && request.method === 'GET') { try { const slug = url.searchParams.get('slug'); if (!slug) return json({ ok: false, error: 'SLUG_REQUIRED' }, 400); const content = await getContent(env, slug); if (!content) return json({ ok: false, error: 'CONTENT_NOT_FOUND' }, 404); return json({ ok: true, content }); } catch (error) { return json({ ok: false, error: error.message }, 500); } }
+    const serviceResponse = await handleServiceOrganic(request); if (serviceResponse) return serviceResponse;
     const feedResponse = await handleOrganicFeed(request, env); if (feedResponse) return feedResponse;
     const robotsResponse = await handleOrganicRobots(request); if (robotsResponse) return robotsResponse;
     const sitemapResponse = await handleOrganicSitemap(request, env); if (sitemapResponse) return sitemapResponse;
