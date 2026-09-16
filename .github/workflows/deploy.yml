@@ -42,3 +42,18 @@ jobs:
           BODY=$(curl -fsS --retry 3 --retry-delay 2 https://nexora-ai.ju-francini2012.workers.dev/api/products)
           echo "$BODY"
           node -e 'const d=JSON.parse(process.argv[1]); if(!Array.isArray(d.products) || d.products.length < 5) { console.error(`CATALOG_SMOKE_TEST_FAILED: ${d.products?.length ?? 0} produtos`); process.exit(1); } console.log(`CATALOG_SMOKE_TEST_OK: ${d.products.length} produtos`);' "$BODY"
+
+      - name: Smoke test real do motor de crescimento
+        run: |
+          set -e
+          sleep 2
+          BODY=$(curl -fsS --retry 5 --retry-delay 3 https://nexora-ai.ju-francini2012.workers.dev/api/growth)
+          echo "$BODY"
+          node -e 'const d=JSON.parse(process.argv[1]); const g=d.growth || {}; if(d.ok!==true || g.enabled!==true) { console.error(`GROWTH_SMOKE_TEST_FAILED: ${JSON.stringify(d)}`); process.exit(1); } if(!Number.isFinite(Number(g.planned)) || !Number.isFinite(Number(g.ready)) || !Number.isFinite(Number(g.completed)) || !Number.isFinite(Number(g.failed))) { console.error(`GROWTH_SMOKE_TEST_FAILED_COUNTERS: ${JSON.stringify(g)}`); process.exit(1); } console.log(`GROWTH_SMOKE_TEST_OK: planned=${g.planned} ready=${g.ready} completed=${g.completed} failed=${g.failed}`);' "$BODY"
+
+      - name: Smoke test real da distribuição
+        run: |
+          set -e
+          BODY=$(curl -fsS --retry 5 --retry-delay 3 https://nexora-ai.ju-francini2012.workers.dev/api/distribution)
+          echo "$BODY"
+          node -e 'const d=JSON.parse(process.argv[1]); const s=d.distribution?.stats || {}; if(d.ok!==true || !Number.isFinite(Number(s.published)) || !Number.isFinite(Number(s.clicks))) { console.error(`DISTRIBUTION_SMOKE_TEST_FAILED: ${JSON.stringify(d)}`); process.exit(1); } console.log(`DISTRIBUTION_SMOKE_TEST_OK: published=${s.published} publishedToday=${s.publishedToday} clicks=${s.clicks} organicClicks=${s.organicClicks}`);' "$BODY"
