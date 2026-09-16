@@ -1,5 +1,6 @@
 const CHANNELS = ['site', 'google', 'facebook', 'instagram', 'tiktok', 'youtube', 'whatsapp', 'telegram'];
 const MAX_QUEUE_PER_CYCLE = 8;
+const INTERNAL_READY_CHANNELS = new Set(['site']);
 
 function safeNumber(value, fallback = 0) {
   const n = Number(value);
@@ -67,12 +68,16 @@ export async function buildGrowthQueue(env, { max = MAX_QUEUE_PER_CYCLE } = {}) 
       WHERE product_id=? AND channel=? AND status IN ('planned','ready') LIMIT 1`)
       .bind(plan.product.id, plan.channel).first();
     if (duplicate) continue;
+    const requiresExternalPublisher = !INTERNAL_READY_CHANNELS.has(plan.channel);
     const id = `aq_${crypto.randomUUID()}`;
     const metadata = {
       productName: plan.product.name,
       objective: 'acquisition_to_monetization',
       funnel: ['awareness','interest','consideration','conversion','revenue'],
-      requiresExternalPublisher: ['facebook','instagram','tiktok','youtube','whatsapp','telegram'].includes(plan.channel)
+      requiresExternalPublisher,
+      readinessRule: INTERNAL_READY_CHANNELS.has(plan.channel)
+        ? 'published_content_available'
+        : 'official_external_integration_required'
     };
     await env.DB.prepare(`INSERT INTO acquisition_queue
       (id,product_id,channel,content_slug,action,priority,status,scheduled_at,created_at,updated_at,metadata_json)
@@ -84,8 +89,27 @@ export async function buildGrowthQueue(env, { max = MAX_QUEUE_PER_CYCLE } = {}) 
   return { planned, queue };
 }
 
+export async function promoteReadyGrowthTasks(env, { max = MAX_QUEUE_PER_CYCLE } = {}) {
+  if (!await ensureTables(env)) return { ready: 0, tasks: [] };
+  const limit = Math.min(20, Math.max(1, Number(max) || MAX_QUEUE_PER_CYCLE));
+  const candidates = await env.DB.prepare(`SELECT q.id,q.product_id AS productId,q.channel,q.content_slug AS contentSlug,q.priority
+    FROM acquisition_queue q
+    WHERE q.status='planned' AND q.channel='site' AND q.content_slug IS NOT NULL
+      AND EXISTS (SELECT 1 FROM content_items c WHERE c.slug=q.content_slug AND c.status='published')
+    ORDER BY q.priority DESC LIMIT ?`).bind(limit).all();
+  const now = new Date().toISOString();
+  const tasks = [];
+  for (const row of candidates.results || []) {
+    const result = await env.DB.prepare(`UPDATE acquisition_queue
+      SET status='ready',updated_at=?
+      WHERE id=? AND status='planned'`).bind(now, row.id).run();
+    if (safeNumber(result?.meta?.changes) > 0) tasks.push(row);
+  }
+  return { ready: tasks.length, tasks };
+}
+
 export async function loadGrowthEngine(env) {
-  if (!await ensureTables(env)) return { enabled: false, planned: 0, ready: 0, completed: 0, channels: [], queueBootstrap: false };
+  if (!await ensureTables(env)) return { enabled: false, planned: 0, ready: 0, completed: 0, channels: [], queueBootstrap: false, readinessPromoted: 0 };
 
   let bootstrap = { planned: 0, queue: [] };
   const existing = await env.DB.prepare(`SELECT COUNT(*) AS count FROM acquisition_queue WHERE status IN ('planned','ready')`).first();
@@ -96,6 +120,9 @@ export async function loadGrowthEngine(env) {
       bootstrap = { planned: 0, queue: [] };
     }
   }
+
+  let readiness = { ready: 0, tasks: [] };
+  try { readiness = await promoteReadyGrowthTasks(env, { max: MAX_QUEUE_PER_CYCLE }); } catch (_) {}
 
   const [planned, ready, completed, channels] = await Promise.all([
     env.DB.prepare("SELECT COUNT(*) AS count FROM acquisition_queue WHERE status='planned'").first(),
@@ -109,6 +136,7 @@ export async function loadGrowthEngine(env) {
     ready: safeNumber(ready?.count),
     completed: safeNumber(completed?.count),
     queueBootstrap: bootstrap.planned > 0,
+    readinessPromoted: readiness.ready,
     channels: (channels.results || []).map(row => ({ channel: row.channel, tasks: safeNumber(row.count) }))
   };
 }
