@@ -5,7 +5,7 @@ import { loadAffiliateStats } from './affiliate-stats.js';
 import { loadContentStats, getContent } from './content-engine.js';
 import { loadCommercialBrain } from './commercial-brain.js';
 import { loadEffortAllocation } from './effort-allocation.js';
-import { buildGrowthQueue, loadGrowthEngine, markGrowthTask } from './growth-engine.js';
+import { buildGrowthQueue, executeReadyGrowthTasks, loadGrowthEngine, markGrowthTask } from './growth-engine.js';
 import { handleOrganicContent, handleOrganicRobots, handleOrganicSitemap } from './organic-content.js';
 
 function json(data, status = 200) { return new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'access-control-allow-origin': '*' } }); }
@@ -48,6 +48,7 @@ export default {
   async scheduled(controller, env, ctx) {
     ctx.waitUntil((async () => {
       try { await buildGrowthQueue(env, { max: 8 }); } catch (error) { console.error('NEXORA_GROWTH_QUEUE_FAILED', error.message); }
+      try { await executeReadyGrowthTasks(env, { max: 8 }); } catch (error) { console.error('NEXORA_GROWTH_EXECUTION_FAILED', error.message); }
       try { await runAutonomyCycle(env, { trigger: `cron:${controller.cron}` }); } catch (error) { console.error('NEXORA_AUTONOMY_CYCLE_FAILED', error.message); }
     })());
   }
