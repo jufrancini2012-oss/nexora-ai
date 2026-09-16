@@ -108,6 +108,45 @@ export async function promoteReadyGrowthTasks(env, { max = MAX_QUEUE_PER_CYCLE }
   return { ready: tasks.length, tasks };
 }
 
+export async function executeReadyGrowthTasks(env, { max = MAX_QUEUE_PER_CYCLE } = {}) {
+  if (!await ensureTables(env)) return { completed: 0, failed: 0, tasks: [] };
+  const limit = Math.min(20, Math.max(1, Number(max) || MAX_QUEUE_PER_CYCLE));
+  const candidates = await env.DB.prepare(`SELECT q.id,q.product_id AS productId,q.channel,q.content_slug AS contentSlug,q.priority,q.metadata_json AS metadataJson
+    FROM acquisition_queue q
+    WHERE q.status='ready' AND q.channel='site' AND q.content_slug IS NOT NULL
+      AND EXISTS (SELECT 1 FROM content_items c WHERE c.slug=q.content_slug AND c.status='published')
+    ORDER BY q.priority DESC LIMIT ?`).bind(limit).all();
+  const now = new Date().toISOString();
+  const tasks = [];
+  let completed = 0;
+  let failed = 0;
+  for (const row of candidates.results || []) {
+    try {
+      const content = await env.DB.prepare(`SELECT slug,status FROM content_items WHERE slug=? AND status='published' LIMIT 1`).bind(row.contentSlug).first();
+      if (!content) throw new Error('PUBLISHED_CONTENT_NOT_FOUND');
+      const metadata = (() => { try { return JSON.parse(row.metadataJson || '{}'); } catch (_) { return {}; } })();
+      const executionEvidence = {
+        ...metadata,
+        executedAt: now,
+        execution: 'internal_site_distribution_verified',
+        evidence: { contentSlug: row.contentSlug, contentStatus: content.status }
+      };
+      const result = await env.DB.prepare(`UPDATE acquisition_queue SET status='completed',updated_at=?,metadata_json=? WHERE id=? AND status='ready'`)
+        .bind(now, JSON.stringify(executionEvidence), row.id).run();
+      if (safeNumber(result?.meta?.changes) > 0) {
+        completed++;
+        tasks.push({ id: row.id, channel: row.channel, contentSlug: row.contentSlug, status: 'completed', executedAt: now });
+      }
+    } catch (error) {
+      failed++;
+      await env.DB.prepare(`UPDATE acquisition_queue SET status='failed',updated_at=?,metadata_json=? WHERE id=? AND status='ready'`)
+        .bind(now, JSON.stringify({ execution: 'internal_site_distribution_failed', executedAt: now, error: error.message }), row.id).run();
+      tasks.push({ id: row.id, channel: row.channel, contentSlug: row.contentSlug, status: 'failed', executedAt: now, error: error.message });
+    }
+  }
+  return { completed, failed, tasks };
+}
+
 export async function loadGrowthEngine(env) {
   if (!await ensureTables(env)) return { enabled: false, planned: 0, ready: 0, completed: 0, channels: [], queueBootstrap: false, readinessPromoted: 0 };
 
@@ -124,10 +163,11 @@ export async function loadGrowthEngine(env) {
   let readiness = { ready: 0, tasks: [] };
   try { readiness = await promoteReadyGrowthTasks(env, { max: MAX_QUEUE_PER_CYCLE }); } catch (_) {}
 
-  const [planned, ready, completed, channels] = await Promise.all([
+  const [planned, ready, completed, failed, channels] = await Promise.all([
     env.DB.prepare("SELECT COUNT(*) AS count FROM acquisition_queue WHERE status='planned'").first(),
     env.DB.prepare("SELECT COUNT(*) AS count FROM acquisition_queue WHERE status='ready'").first(),
     env.DB.prepare("SELECT COUNT(*) AS count FROM acquisition_queue WHERE status='completed'").first(),
+    env.DB.prepare("SELECT COUNT(*) AS count FROM acquisition_queue WHERE status='failed'").first(),
     env.DB.prepare(`SELECT channel,COUNT(*) AS count FROM acquisition_queue GROUP BY channel ORDER BY count DESC`).all()
   ]);
   return {
@@ -135,6 +175,7 @@ export async function loadGrowthEngine(env) {
     planned: safeNumber(planned?.count),
     ready: safeNumber(ready?.count),
     completed: safeNumber(completed?.count),
+    failed: safeNumber(failed?.count),
     queueBootstrap: bootstrap.planned > 0,
     readinessPromoted: readiness.ready,
     channels: (channels.results || []).map(row => ({ channel: row.channel, tasks: safeNumber(row.count) }))
