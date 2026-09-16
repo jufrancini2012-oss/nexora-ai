@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NEXORA AI · Serviços</title>
+<meta name="description" content="Serviços digitais de revisão, tradução, textos, currículo e conteúdo.">
+<style>
+body{font-family:system-ui,-apple-system,sans-serif;margin:0;background:#f7f7f7;color:#171717}main{max-width:720px;margin:auto;padding:18px}.hero,.card{background:#fff;border-radius:18px;padding:18px;margin-bottom:14px;box-shadow:0 2px 12px rgba(0,0,0,.06)}h1{margin:0 0 8px;font-size:27px}.muted{color:#666}.grid{display:grid;gap:12px}.card h2{font-size:18px;margin:0 0 6px}.price{font-weight:800;font-size:18px;margin:10px 0}.tag{display:inline-block;font-size:12px;padding:5px 8px;border-radius:999px;background:#eee;margin-bottom:8px}.btn{display:block;width:100%;box-sizing:border-box;border:0;border-radius:12px;padding:13px 15px;background:#171717;color:#fff;font-weight:700;text-align:center;text-decoration:none}.form{display:none}.form input,.form textarea{width:100%;box-sizing:border-box;padding:12px;margin:6px 0 10px;border:1px solid #ddd;border-radius:10px;font:inherit}.back{display:inline-block;margin-bottom:12px;color:#555;text-decoration:none}
+</style>
+</head>
+<body>
+<main>
+<a class="back" href="/">← Voltar ao NEXORA</a>
+<section class="hero">
+<h1>🤖 NEXORA AI · Serviços</h1>
+<p class="muted">Serviços digitais feitos sob demanda com apoio de inteligência artificial e revisão humana antes da entrega.</p>
+<p class="muted"><strong>Regra de segurança:</strong> o preço abaixo é inicial; o pedido só é confirmado após orçamento e aceite.</p>
+</section>
+<section id="catalog" class="grid"></section>
+<section id="request" class="hero form">
+<h2>Solicitar serviço</h2>
+<p id="selected" class="muted"></p>
+<input id="name" placeholder="Seu nome">
+<input id="contact" placeholder="WhatsApp ou e-mail">
+<textarea id="brief" rows="5" placeholder="Explique o que você precisa"></textarea>
+<button class="btn" onclick="prepareRequest()">Gerar solicitação</button>
+<p id="result" class="muted"></p>
+</section>
+</main>
+<script>
+const services=[
+['Revisão e correção de texto','Texto','Correção de ortografia, gramática, pontuação e clareza.','R$ 19,90','até 1.000 palavras','até 24h'],
+['Tradução Português → Inglês','Tradução','Tradução de textos gerais com revisão.','R$ 24,90','até 500 palavras','até 24h'],
+['Tradução Inglês → Português','Tradução','Tradução para português do Brasil com revisão.','R$ 24,90','até 500 palavras','até 24h'],
+['Reescrita e melhoria de texto','Texto','Texto mais claro, profissional e natural.','R$ 24,90','até 1.000 palavras','até 24h'],
+['Currículo profissional','Carreira','Organização e redação de currículo objetivo.','R$ 39,90','1 currículo','até 48h'],
+['Carta de apresentação','Carreira','Texto personalizado para candidatura.','R$ 29,90','1 carta','até 24h'],
+['Legendas para redes sociais','Marketing','Pacote de legendas para divulgação.','R$ 39,90','5 legendas','até 48h'],
+['Descrição de produto','Vendas','Descrição organizada para marketplace ou loja.','R$ 19,90','1 produto','até 24h'],
+['Mensagens para WhatsApp comercial','Vendas','Mensagens de atendimento, oferta e pós-venda.','R$ 29,90','5 mensagens','até 24h'],
+['E-mail profissional','Texto','Redação ou revisão de e-mail profissional.','R$ 14,90','1 e-mail','até 24h']
+];
+let selectedService=null;
+const catalog=document.getElementById('catalog');
+services.forEach((s,i)=>{catalog.insertAdjacentHTML('beforeend',`<article class="card"><span class="tag">${s[1]}</span><h2>${s[0]}</h2><p class="muted">${s[2]}</p><p><strong>${s[4]}</strong> · ${s[5]}</p><p class="price">A partir de ${s[3]}</p><button class="btn" onclick="selectService(${i})">Solicitar</button></article>`)})
+function selectService(i){selectedService=services[i];document.getElementById('request').style.display='block';document.getElementById('selected').textContent='Serviço: '+selectedService[0]+' · valor inicial '+selectedService[3];document.getElementById('request').scrollIntoView({behavior:'smooth'});}
+function prepareRequest(){if(!selectedService)return;const name=document.getElementById('name').value.trim();const contact=document.getElementById('contact').value.trim();const brief=document.getElementById('brief').value.trim();if(!name||!contact||!brief){document.getElementById('result').textContent='Preencha nome, contato e o que você precisa.';return;}const text=`SOLICITAÇÃO NEXORA AI\nServiço: ${selectedService[0]}\nCliente: ${name}\nContato: ${contact}\nPedido: ${brief}\nValor inicial informado: ${selectedService[3]}\n\nAguardar orçamento e confirmação antes da execução.`;navigator.clipboard?.writeText(text);document.getElementById('result').textContent='Solicitação preparada e copiada. Agora envie esse texto pelo seu canal de atendimento. O orçamento ainda precisa ser confirmado.';}
+</script>
+</body>
+</html>
