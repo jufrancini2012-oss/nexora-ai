@@ -9,6 +9,7 @@ import { buildGrowthQueue, executeReadyGrowthTasks, loadGrowthEngine, markGrowth
 import { handleOrganicContent, handleOrganicRobots, handleOrganicSitemap } from './organic-content.js';
 import { handleServiceOrganic } from './service-organic.js';
 import { createServiceLead, loadServiceLeadStats } from './service-leads.js';
+import { listMarketplacePlatforms, loadMarketplaceRadar, upsertMarketplaceOpportunity, markMarketplaceOpportunity, marketplaceRadarHealth } from './marketplace-radar.js';
 
 function json(data, status = 200) { return new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'access-control-allow-origin': '*' } }); }
 function xmlEscape(value = '') { return String(value).replace(/[&<>\\"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;' }[c])); }
@@ -39,6 +40,11 @@ export default {
     if (url.pathname === '/api/growth' && request.method === 'GET') { try { return json({ ok: true, growth: await loadGrowthEngine(env) }); } catch (error) { return json({ ok: false, error: error.message }, 500); } }
     if (url.pathname === '/api/growth/plan' && request.method === 'POST') { try { const body = await request.json().catch(() => ({})); return json({ ok: true, plan: await buildGrowthQueue(env, { max: body.max || 8 }) }); } catch (error) { return json({ ok: false, error: error.message }, 500); } }
     if (url.pathname === '/api/growth/task' && request.method === 'POST') { try { const body = await request.json(); const updated = await markGrowthTask(env, body.id, body.status); return json({ ok: updated }); } catch (error) { return json({ ok: false, error: error.message }, 500); } }
+    if (url.pathname === '/api/marketplace-radar' && request.method === 'GET') { try { return json({ ok: true, radar: await loadMarketplaceRadar(env, new URL(request.url).searchParams.get('limit') || 20) }); } catch (error) { return json({ ok: false, error: error.message }, 500); } }
+    if (url.pathname === '/api/marketplace-radar/platforms' && request.method === 'GET') { return json({ ok: true, platforms: listMarketplacePlatforms() }); }
+    if (url.pathname === '/api/marketplace-radar/health' && request.method === 'GET') { try { return json({ ok: true, health: await marketplaceRadarHealth(env) }); } catch (error) { return json({ ok: false, error: error.message }, 500); } }
+    if (url.pathname === '/api/marketplace-radar/opportunity' && request.method === 'POST') { try { const body = await request.json(); return json({ ok: true, opportunity: await upsertMarketplaceOpportunity(env, body) }, 201); } catch (error) { return json({ ok: false, error: error.message }, 400); } }
+    if (url.pathname === '/api/marketplace-radar/task' && request.method === 'POST') { try { const body = await request.json(); return json({ ok: await markMarketplaceOpportunity(env, body.id, body.status) }); } catch (error) { return json({ ok: false, error: error.message }, 400); } }
     if (url.pathname === '/api/services/request' && request.method === 'POST') { try { const body = await request.json(); return json({ ok: true, lead: await createServiceLead(env, body, request.url) }, 201); } catch (error) { const status = ['SERVICE_LEAD_REQUIRED','SERVICE_LEAD_LANGUAGE','SERVICE_LEAD_CURRENCY'].includes(error.message) ? 400 : 500; return json({ ok: false, error: error.message }, status); } }
     if (url.pathname === '/api/services/stats' && request.method === 'GET') { try { return json({ ok: true, stats: await loadServiceLeadStats(env) }); } catch (error) { return json({ ok: false, error: error.message }, 500); } }
     if (url.pathname === '/api/content' && request.method === 'GET') { try { const slug = url.searchParams.get('slug'); if (!slug) return json({ ok: false, error: 'SLUG_REQUIRED' }, 400); const content = await getContent(env, slug); if (!content) return json({ ok: false, error: 'CONTENT_NOT_FOUND' }, 404); return json({ ok: true, content }); } catch (error) { return json({ ok: false, error: error.message }, 500); } }
@@ -54,6 +60,7 @@ export default {
     ctx.waitUntil((async () => {
       try { await buildGrowthQueue(env, { max: 8 }); } catch (error) { console.error('NEXORA_GROWTH_QUEUE_FAILED', error.message); }
       try { await executeReadyGrowthTasks(env, { max: 8 }); } catch (error) { console.error('NEXORA_GROWTH_EXECUTION_FAILED', error.message); }
+      try { await marketplaceRadarHealth(env); } catch (error) { console.error('NEXORA_MARKETPLACE_RADAR_FAILED', error.message); }
       try { await runAutonomyCycle(env, { trigger: `cron:${controller.cron}` }); } catch (error) { console.error('NEXORA_AUTONOMY_CYCLE_FAILED', error.message); }
     })());
   }
