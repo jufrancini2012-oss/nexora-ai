@@ -10,6 +10,7 @@ import { handleOrganicContent, handleOrganicRobots, handleOrganicSitemap } from 
 import { handleServiceOrganic } from './service-organic.js';
 import { createServiceLead, loadServiceLeadStats } from './service-leads.js';
 import { listMarketplacePlatforms, loadMarketplaceRadar, upsertMarketplaceOpportunity, markMarketplaceOpportunity, marketplaceRadarHealth } from './marketplace-radar.js';
+import { buildProposalTask, getProposalAutomationPolicy } from './autonomous-proposal-engine.js';
 
 function json(data, status = 200) { return new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'access-control-allow-origin': '*' } }); }
 function xmlEscape(value = '') { return String(value).replace(/[&<>\\"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;' }[c])); }
@@ -45,6 +46,8 @@ export default {
     if (url.pathname === '/api/marketplace-radar/health' && request.method === 'GET') { try { return json({ ok: true, health: await marketplaceRadarHealth(env) }); } catch (error) { return json({ ok: false, error: error.message }, 500); } }
     if (url.pathname === '/api/marketplace-radar/opportunity' && request.method === 'POST') { try { const body = await request.json(); return json({ ok: true, opportunity: await upsertMarketplaceOpportunity(env, body) }, 201); } catch (error) { return json({ ok: false, error: error.message }, 400); } }
     if (url.pathname === '/api/marketplace-radar/task' && request.method === 'POST') { try { const body = await request.json(); return json({ ok: await markMarketplaceOpportunity(env, body.id, body.status) }); } catch (error) { return json({ ok: false, error: error.message }, 400); } }
+    if (url.pathname === '/api/marketplace-proposal/policy' && request.method === 'GET') { return json({ ok: true, policy: getProposalAutomationPolicy() }); }
+    if (url.pathname === '/api/marketplace-proposal/prepare' && request.method === 'POST') { try { const body = await request.json(); return json({ ok: true, task: buildProposalTask(body) }); } catch (error) { return json({ ok: false, error: error.message }, 400); } }
     if (url.pathname === '/api/services/request' && request.method === 'POST') { try { const body = await request.json(); return json({ ok: true, lead: await createServiceLead(env, body, request.url) }, 201); } catch (error) { const status = ['SERVICE_LEAD_REQUIRED','SERVICE_LEAD_LANGUAGE','SERVICE_LEAD_CURRENCY'].includes(error.message) ? 400 : 500; return json({ ok: false, error: error.message }, status); } }
     if (url.pathname === '/api/services/stats' && request.method === 'GET') { try { return json({ ok: true, stats: await loadServiceLeadStats(env) }); } catch (error) { return json({ ok: false, error: error.message }, 500); } }
     if (url.pathname === '/api/content' && request.method === 'GET') { try { const slug = url.searchParams.get('slug'); if (!slug) return json({ ok: false, error: 'SLUG_REQUIRED' }, 400); const content = await getContent(env, slug); if (!content) return json({ ok: false, error: 'CONTENT_NOT_FOUND' }, 404); return json({ ok: true, content }); } catch (error) { return json({ ok: false, error: error.message }, 500); } }
