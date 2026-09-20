@@ -165,7 +165,7 @@ export function decideProductAction(product = {}, metrics = {}, options = {}) {
  */
 export function calculateReinvestment(netDailyRevenue, options = {}) {
   const revenue = nonNegative(netDailyRevenue);
-  const threshold = nonNegative(options.threshold ?? 1000);
+  const threshold = nonNegative(options.threshold ?? 250);
   const rate = Math.min(1, Math.max(0, Number(options.rate ?? 0.10)));
   const allocation = options.allocation ?? {
     productPromotion: 0.40,
@@ -173,7 +173,7 @@ export function calculateReinvestment(netDailyRevenue, options = {}) {
     cloudInfrastructure: 0.20,
     githubDevelopment: 0.15
   };
-  const eligible = revenue > threshold;
+  const eligible = revenue >= threshold;
   const reinvestment = eligible ? Number((revenue * rate).toFixed(2)) : 0;
   const allocate = (share) => Number((reinvestment * Number(share || 0)).toFixed(2));
 
