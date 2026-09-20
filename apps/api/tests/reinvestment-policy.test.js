@@ -2,16 +2,16 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { calculateReinvestment, calculateVerifiedNetProfit } from '../src/reinvestment-policy.js';
 
-test('does not reinvest at or below R$ 500 net profit', () => {
-  assert.deepEqual(calculateReinvestment(500).reservedAmount, 0);
-  assert.deepEqual(calculateReinvestment(499.99).reservedAmount, 0);
+test('does not reinvest below R$ 250 net profit', () => {
+  assert.deepEqual(calculateReinvestment(249.99).reservedAmount, 0);
+  assert.deepEqual(calculateReinvestment(250).reservedAmount, 25);
 });
 
-test('reserves exactly 10% only above the net-profit threshold', () => {
-  assert.deepEqual(calculateReinvestment(1200), {
+test('reserves exactly 10% at and above the R$ 250 threshold', () => {
+  assert.deepEqual(calculateReinvestment(1250), {
     eligible: true,
-    netProfit: 1200,
-    reservedAmount: 120,
+    netProfit: 1250,
+    reservedAmount: 125,
     reason: 'NET_PROFIT_ABOVE_THRESHOLD'
   });
 });
