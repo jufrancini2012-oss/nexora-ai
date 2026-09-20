@@ -49,27 +49,27 @@ test('uses affiliate commission as net revenue basis', () => {
   assert.equal(result.performance.earningsPerClick, 0.7);
 });
 
-test('reinvests exactly 10 percent only above one thousand net', () => {
-  assert.deepEqual(calculateReinvestment(1000), {
-    netDailyRevenue: 1000,
-    threshold: 1000,
+test('reinvests exactly 10 percent from R$ 250 net', () => {
+  assert.deepEqual(calculateReinvestment(250), {
+    netDailyRevenue: 250,
+    threshold: 250,
     rate: 0.1,
-    eligible: false,
-    reinvestment: 0,
+    eligible: true,
+    reinvestment: 25,
     allocation: {
       productPromotion: 0,
       aiAndAutomation: 0,
       cloudInfrastructure: 0,
       githubDevelopment: 0
     },
-    retained: 1000,
+    retained: 225,
     basis: 'net_revenue'
   });
 
-  const result = calculateReinvestment(1200);
+  const result = calculateReinvestment(1250);
   assert.equal(result.eligible, true);
-  assert.equal(result.reinvestment, 120);
-  assert.equal(result.retained, 1080);
+  assert.equal(result.reinvestment, 125);
+  assert.equal(result.retained, 1125);
 });
 
 test('evaluates the whole portfolio and puts scalable products first', () => {
