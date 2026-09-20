@@ -57,10 +57,11 @@ test('reinvests exactly 10 percent from R$ 250 net', () => {
     eligible: true,
     reinvestment: 25,
     allocation: {
-      productPromotion: 0,
-      aiAndAutomation: 0,
-      cloudInfrastructure: 0,
-      githubDevelopment: 0
+      productPromotion: 8.75,
+      aiAndAutomation: 5,
+      cloudInfrastructure: 3.75,
+      githubDevelopment: 3.75,
+      servicePlatformSubscriptions: 3.75
     },
     retained: 225,
     basis: 'net_revenue'
@@ -70,6 +71,14 @@ test('reinvests exactly 10 percent from R$ 250 net', () => {
   assert.equal(result.eligible, true);
   assert.equal(result.reinvestment, 125);
   assert.equal(result.retained, 1125);
+  assert.equal(result.allocation.servicePlatformSubscriptions, 18.75);
+});
+
+test('does not allocate reinvestment below the R$ 250 threshold', () => {
+  const result = calculateReinvestment(249.99);
+  assert.equal(result.eligible, false);
+  assert.equal(result.reinvestment, 0);
+  assert.equal(result.allocation.servicePlatformSubscriptions, 0);
 });
 
 test('evaluates the whole portfolio and puts scalable products first', () => {
