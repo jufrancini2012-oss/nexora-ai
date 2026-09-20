@@ -1,5 +1,5 @@
 name = "nexora-ai"
-main = "src/autonomous-worker.js"
+main = "src/micro-partnership-worker.js"
 compatibility_date = "2026-09-05"
 account_id = "98cf18038e390ed6ff7684d12f4f6f2e"
 
