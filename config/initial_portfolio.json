@@ -44,7 +44,7 @@
       "clicks": 100,
       "purchases": 3
     },
-    "daily_net_revenue_reinvestment_threshold_brl": 1000,
+    "daily_net_revenue_reinvestment_threshold_brl": 250,
     "reinvestment_rate_above_threshold": 0.10,
     "reinvestment_basis": "net_revenue",
     "reinvestment_allocation": {
@@ -55,7 +55,7 @@
     },
     "reinvestment_guardrails": {
       "only_verified_net_revenue": true,
-      "only_when_daily_net_revenue_above_threshold": true,
+      "only_when_daily_net_revenue_at_or_above_threshold": true,
       "optimize_for_revenue_growth_and_system_reliability": true,
       "human_approval_required_for_external_billing_changes": true
     }
