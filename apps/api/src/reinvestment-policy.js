@@ -1,5 +1,5 @@
 export const GROWTH_POLICY = Object.freeze({
-  thresholdNetProfit: 500,
+  thresholdNetProfit: 250,
   rate: 0.10,
   basis: 'verified_net_profit',
   currency: 'BRL'
@@ -7,7 +7,7 @@ export const GROWTH_POLICY = Object.freeze({
 
 export function calculateReinvestment(netProfit, policy = GROWTH_POLICY) {
   const value = Number(netProfit);
-  if (!Number.isFinite(value) || value <= policy.thresholdNetProfit) {
+  if (!Number.isFinite(value) || value < policy.thresholdNetProfit) {
     return { eligible: false, netProfit: Number.isFinite(value) ? value : 0, reservedAmount: 0, reason: 'THRESHOLD_NOT_EXCEEDED' };
   }
   const reservedAmount = Number((value * policy.rate).toFixed(2));
