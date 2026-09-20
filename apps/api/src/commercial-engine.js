@@ -160,18 +160,23 @@ export function decideProductAction(product = {}, metrics = {}, options = {}) {
 
 /**
  * Returns a daily capital-allocation decision based on verified net revenue.
- * The reinvestment threshold is deliberately based on net, never gross, revenue.
- * The reserve is split between promotion, AI/automation and core infrastructure.
+ * The reserve is 10% once the net threshold is reached.
+ *
+ * The service-platform reserve covers recurring subscriptions that can
+ * generate additional revenue for the operation (for example, Workana
+ * and 99Freelas). It accumulates until there is enough balance and never
+ * authorizes an external charge by itself.
  */
 export function calculateReinvestment(netDailyRevenue, options = {}) {
   const revenue = nonNegative(netDailyRevenue);
   const threshold = nonNegative(options.threshold ?? 250);
   const rate = Math.min(1, Math.max(0, Number(options.rate ?? 0.10)));
   const allocation = options.allocation ?? {
-    productPromotion: 0.40,
-    aiAndAutomation: 0.25,
-    cloudInfrastructure: 0.20,
-    githubDevelopment: 0.15
+    productPromotion: 0.35,
+    aiAndAutomation: 0.20,
+    cloudInfrastructure: 0.15,
+    githubDevelopment: 0.15,
+    servicePlatformSubscriptions: 0.15
   };
   const eligible = revenue >= threshold;
   const reinvestment = eligible ? Number((revenue * rate).toFixed(2)) : 0;
@@ -187,7 +192,8 @@ export function calculateReinvestment(netDailyRevenue, options = {}) {
       productPromotion: allocate(allocation.productPromotion),
       aiAndAutomation: allocate(allocation.aiAndAutomation),
       cloudInfrastructure: allocate(allocation.cloudInfrastructure),
-      githubDevelopment: allocate(allocation.githubDevelopment)
+      githubDevelopment: allocate(allocation.githubDevelopment),
+      servicePlatformSubscriptions: allocate(allocation.servicePlatformSubscriptions)
     },
     retained: Number((revenue - reinvestment).toFixed(2)),
     basis: "net_revenue"
