@@ -1,5 +1,5 @@
 -- NEXORA AI — regra financeira de reinvestimento automático V1
--- Regra: somente quando a receita diária LÍQUIDA ultrapassar R$ 1.000,
+-- Regra: somente quando a receita diária LÍQUIDA ultrapassar R$ 250,
 -- 10% da receita líquida do dia fica reservado para melhoria do sistema e promoção.
 -- D1 usa SQLite, portanto esta migração não pode usar tipos/funções PostgreSQL.
 
@@ -27,7 +27,7 @@ INSERT INTO reinvestment_rules (
 VALUES (
   'default-net-revenue-reinvestment',
   'default-net-revenue-reinvestment',
-  1000.00,
+  250.00,
   0.1000,
   'net_daily_revenue',
   'system_improvement_and_product_promotion',
