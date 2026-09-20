@@ -48,10 +48,18 @@
     "reinvestment_rate_above_threshold": 0.10,
     "reinvestment_basis": "net_revenue",
     "reinvestment_allocation": {
-      "product_promotion": 0.40,
-      "ai_and_automation": 0.25,
-      "cloud_infrastructure": 0.20,
-      "github_development": 0.15
+      "product_promotion": 0.35,
+      "ai_and_automation": 0.20,
+      "cloud_infrastructure": 0.15,
+      "github_development": 0.15,
+      "service_platform_subscriptions": 0.15
+    },
+    "service_platform_reserve": {
+      "enabled": true,
+      "purpose": "recurring subscriptions for revenue-generating service platforms",
+      "examples": ["Workana", "99Freelas"],
+      "accumulate_until_sufficient_balance": true,
+      "human_approval_required_before_charging": true
     },
     "reinvestment_guardrails": {
       "only_verified_net_revenue": true,
