@@ -11,6 +11,7 @@ import { handleServiceOrganic } from './service-organic.js';
 import { createServiceLead, loadServiceLeadStats } from './service-leads.js';
 import { listMarketplacePlatforms, loadMarketplaceRadar, upsertMarketplaceOpportunity, markMarketplaceOpportunity, marketplaceRadarHealth } from './marketplace-radar.js';
 import { buildProposalTask, getProposalAutomationPolicy } from './autonomous-proposal-engine.js';
+import { syncShopeeCatalog } from './shopee-affiliate.js';
 
 function json(data, status = 200) { return new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'access-control-allow-origin': '*' } }); }
 function xmlEscape(value = '') { return String(value).replace(/[&<>\\"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;' }[c])); }
@@ -64,6 +65,7 @@ export default {
       try { await buildGrowthQueue(env, { max: 8 }); } catch (error) { console.error('NEXORA_GROWTH_QUEUE_FAILED', error.message); }
       try { await executeReadyGrowthTasks(env, { max: 8 }); } catch (error) { console.error('NEXORA_GROWTH_EXECUTION_FAILED', error.message); }
       try { await marketplaceRadarHealth(env); } catch (error) { console.error('NEXORA_MARKETPLACE_RADAR_FAILED', error.message); }
+      try { await syncShopeeCatalog(env); } catch (error) { console.error('NEXORA_SHOPEE_SYNC_FAILED', error.message); }
       try { await runAutonomyCycle(env, { trigger: `cron:${controller.cron}` }); } catch (error) { console.error('NEXORA_AUTONOMY_CYCLE_FAILED', error.message); }
     })());
   }
