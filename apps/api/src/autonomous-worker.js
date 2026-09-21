@@ -9,6 +9,7 @@ import { buildGrowthQueue, executeReadyGrowthTasks, loadGrowthEngine, markGrowth
 import { handleOrganicContent, handleOrganicRobots, handleOrganicSitemap } from './organic-content.js';
 import { handleServiceOrganic } from './service-organic.js';
 import { createServiceLead, loadServiceLeadStats } from './service-leads.js';
+import { loadProspecting, upsertProspectLead, updateProspectStatus, loadProspectingStats, prospectingPolicy } from './prospecting.js';
 import { listMarketplacePlatforms, loadMarketplaceRadar, upsertMarketplaceOpportunity, markMarketplaceOpportunity, marketplaceRadarHealth } from './marketplace-radar.js';
 import { buildProposalTask, getProposalAutomationPolicy } from './autonomous-proposal-engine.js';
 import { syncShopeeCatalog } from './shopee-affiliate.js';
@@ -51,6 +52,11 @@ export default {
     if (url.pathname === '/api/marketplace-proposal/prepare' && request.method === 'POST') { try { const body = await request.json(); return json({ ok: true, task: buildProposalTask(body) }); } catch (error) { return json({ ok: false, error: error.message }, 400); } }
     if (url.pathname === '/api/services/request' && request.method === 'POST') { try { const body = await request.json(); return json({ ok: true, lead: await createServiceLead(env, body, request.url) }, 201); } catch (error) { const status = ['SERVICE_LEAD_REQUIRED','SERVICE_LEAD_LANGUAGE','SERVICE_LEAD_CURRENCY'].includes(error.message) ? 400 : 500; return json({ ok: false, error: error.message }, status); } }
     if (url.pathname === '/api/services/stats' && request.method === 'GET') { try { return json({ ok: true, stats: await loadServiceLeadStats(env) }); } catch (error) { return json({ ok: false, error: error.message }, 500); } }
+    if (url.pathname === '/api/prospecting/policy' && request.method === 'GET') { return json({ ok: true, policy: prospectingPolicy }); }
+    if (url.pathname === '/api/prospecting/leads' && request.method === 'GET') { try { return json({ ok: true, leads: await loadProspecting(env, new URL(request.url).searchParams.get('limit') || 50) }); } catch (error) { return json({ ok: false, error: error.message }, 500); } }
+    if (url.pathname === '/api/prospecting/stats' && request.method === 'GET') { try { return json({ ok: true, stats: await loadProspectingStats(env) }); } catch (error) { return json({ ok: false, error: error.message }, 500); } }
+    if (url.pathname === '/api/prospecting/lead' && request.method === 'POST') { try { const body = await request.json(); return json({ ok: true, lead: await upsertProspectLead(env, body) }, 201); } catch (error) { const status = error.message === 'PROSPECT_REQUIRED' ? 400 : 500; return json({ ok: false, error: error.message }, status); } }
+    if (url.pathname === '/api/prospecting/status' && request.method === 'POST') { try { const body = await request.json(); return json({ ok: await updateProspectStatus(env, body.id, body.status) }); } catch (error) { return json({ ok: false, error: error.message }, 400); } }
     if (url.pathname === '/api/content' && request.method === 'GET') { try { const slug = url.searchParams.get('slug'); if (!slug) return json({ ok: false, error: 'SLUG_REQUIRED' }, 400); const content = await getContent(env, slug); if (!content) return json({ ok: false, error: 'CONTENT_NOT_FOUND' }, 404); return json({ ok: true, content }); } catch (error) { return json({ ok: false, error: error.message }, 500); } }
     const serviceResponse = await handleServiceOrganic(request); if (serviceResponse) return serviceResponse;
     const feedResponse = await handleOrganicFeed(request, env); if (feedResponse) return feedResponse;
