@@ -90,7 +90,7 @@ export async function enrichShopeeProduct(env, product) {
 export async function syncShopeeCatalog(env) {
   if (!env?.DB) return { attempted: 0, updated: 0, apiConfigured: hasShopeeApiCredentials(env) };
   const rows = await env.DB.prepare(`SELECT id, external_id, name, price, currency, affiliate_url, destination_url, evidence_json
-    FROM affiliate_products WHERE provider='shopee' AND status != 'blocked'`).all();
+    FROM affiliate_products WHERE provider='shopee' AND status != 'blocked' AND (updated_at < datetime('now','-6 hours') OR name LIKE 'Oferta Shopee %')`).all();
 
   let updated = 0;
   for (const row of (rows.results || [])) {
