@@ -89,7 +89,7 @@ export async function enrichShopeeProduct(env, product) {
 
 export async function syncShopeeCatalog(env) {
   if (!env?.DB) return { attempted: 0, updated: 0, apiConfigured: hasShopeeApiCredentials(env) };
-  const rows = await env.DB.prepare(`SELECT id, external_id, name, price, currency, affiliate_url, destination_url, evidence_json
+  const rows = await env.DB.prepare(`SELECT id, external_id, name, price, currency, affiliate_url, destination_url, image_url, evidence_json
     FROM affiliate_products WHERE provider='shopee' AND status != 'blocked' AND (updated_at < datetime('now','-6 hours') OR name LIKE 'Oferta Shopee %')`).all();
 
   let updated = 0;
@@ -102,7 +102,8 @@ export async function syncShopeeCatalog(env) {
       price: row.price,
       currency: row.currency || 'BRL',
       affiliateUrl: row.affiliate_url,
-      destinationUrl: row.destination_url
+      destinationUrl: row.destination_url,
+      imageUrl: row.image_url
     });
     const evidence = {
       ...(row.evidence_json ? JSON.parse(row.evidence_json) : {}),
@@ -112,9 +113,9 @@ export async function syncShopeeCatalog(env) {
       lastSyncAt: new Date().toISOString()
     };
     await env.DB.prepare(`UPDATE affiliate_products
-      SET name=?, price=?, currency=?, destination_url=?, evidence_json=?, updated_at=?
+      SET name=?, price=?, currency=?, destination_url=?, image_url=?, evidence_json=?, updated_at=?
       WHERE id=?`)
-      .bind(enriched.name, enriched.price, enriched.currency, enriched.destinationUrl, JSON.stringify(evidence), new Date().toISOString(), row.id)
+      .bind(enriched.name, enriched.price, enriched.currency, enriched.destinationUrl, enriched.imageUrl, JSON.stringify(evidence), new Date().toISOString(), row.id)
       .run();
     updated++;
   }
