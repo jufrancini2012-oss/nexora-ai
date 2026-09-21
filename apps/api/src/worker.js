@@ -46,12 +46,12 @@ async function loadOpportunities(env){
 async function loadAffiliateCatalog(env){
   if(!env?.DB) return [];
   try {
-    const result = await env.DB.prepare(`SELECT id,provider,external_id,name,price,currency,commission_rate,commission_amount,affiliate_url,score,status,evidence_json FROM affiliate_products ORDER BY COALESCE(score,0) DESC, commission_rate DESC, name ASC`).all();
+    const result = await env.DB.prepare(`SELECT id,provider,external_id,name,price,currency,commission_rate,commission_amount,affiliate_url,image_url,score,status,evidence_json FROM affiliate_products ORDER BY COALESCE(score,0) DESC, commission_rate DESC, name ASC`).all();
     return (result.results || []).map((row) => ({
       id:row.id,provider:row.provider,externalId:row.external_id,name:row.name,
       price:row.price==null?null:Number(row.price),currency:row.currency||'BRL',
       commissionRate:row.commission_rate==null?null:Number(row.commission_rate),commissionAmount:row.commission_amount==null?null:Number(row.commission_amount),
-      affiliateUrl:row.affiliate_url||null,score:row.score==null?null:Number(row.score),status:row.status||'candidate',
+      affiliateUrl:row.affiliate_url||null,imageUrl:row.image_url||null,score:row.score==null?null:Number(row.score),status:row.status||'candidate',
       evidence:row.evidence_json?JSON.parse(row.evidence_json):null,commercialType:'affiliate',source:'affiliate_catalog',sourceUrl:row.affiliate_url||null,
       margin:row.commission_rate==null?null:Number(row.commission_rate)
     }));
