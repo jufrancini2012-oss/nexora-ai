@@ -1,3 +1,5 @@
+import { syncShopeeCatalog } from './shopee-affiliate.js';
+
 const INITIAL_AFFILIATE_PRODUCTS = [
   ['mli-1ouWP7a','mercadolivre','1ouWP7a','Gift Card PlayStation Store R$150 (Digital)',115.00,0.05,5.75,'https://meli.la/1ouWP7a','medium'],
   ['mli-1xeoo34','mercadolivre','1xeoo34','Luva Nitrílica Preta Descarpack 100un — M',24.72,0.12,2.97,'https://meli.la/1xeoo34','high'],
@@ -37,6 +39,9 @@ export async function ensureAffiliateCatalog(env) {
     updated_at TEXT NOT NULL
   )`).run();
 
+  // Compatibilidade com bases já criadas antes do enriquecimento automático.
+  try { await env.DB.prepare('ALTER TABLE affiliate_products ADD COLUMN image_url TEXT').run(); } catch {}
+
   for (const [id, provider, externalId, name, price, commissionRate, commissionAmount, affiliateUrl, priority] of INITIAL_AFFILIATE_PRODUCTS) {
     await env.DB.prepare(`INSERT OR IGNORE INTO affiliate_products
       (id,provider,external_id,name,price,currency,commission_rate,commission_amount,destination_url,affiliate_url,score,status,evidence_json,created_at,updated_at)
@@ -44,6 +49,9 @@ export async function ensureAffiliateCatalog(env) {
       .bind(id, provider, externalId, name, price, 'BRL', commissionRate, commissionAmount, null, affiliateUrl, null, 'candidate',
         JSON.stringify({ source: 'initial_portfolio', priority, verified: false }), new Date().toISOString(), new Date().toISOString()).run();
   }
+
+  // Atualiza produtos Shopee automaticamente; o próprio sincronizador limita a frequência.
+  try { await syncShopeeCatalog(env); } catch (error) { console.error('NEXORA_SHOPEE_SYNC_FAILED', error.message); }
 
   const count = await env.DB.prepare('SELECT COUNT(*) AS count FROM affiliate_products').first();
   return Number(count?.count || 0);
