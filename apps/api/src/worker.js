@@ -5,6 +5,7 @@ import { fetchMercadoLivreTrends, trendScores } from './mercadolivre-trends.js';
 import { getContent, loadContentStats } from './content-engine.js';
 import { handleAffiliateRedirect } from './affiliate-redirect.js';
 import { ensureAffiliateCatalog } from './affiliate-catalog.js';
+import { upsertProspectLead, loadProspecting, updateProspectStatus, loadProspectingStats } from './prospecting.js';
 
 const policy = {
   autonomyEnabled: true,
@@ -120,6 +121,10 @@ async function route(request,env){
     const gateway=snapshot(),metrics=metricsFromGateway(gateway),persistedOrders=await loadOrders(env),opportunities=await loadOpportunities(env),selected=await chooseProducts(env),affiliateCatalog=await loadAffiliateCatalog(env),content=await loadContentStats(env);
     return json({autonomy:{enabled:policy.autonomyEnabled,mode:'balanced',minScore:policy.minScore},kpis:{salesToday:metrics.sales,revenueToday:metrics.revenue,leadsToday:persistedOrders.length,conversionRate:persistedOrders.length?Number((metrics.sales/persistedOrders.length).toFixed(4)):0,netProfitToday:0},pipeline:{researched:opportunities.length,candidates:opportunities.filter((p)=>p.score>=65).length,selected:selected.length,activeTests:selected.length,catalog:affiliateCatalog.length,contentPublished:content.published,contentToday:content.publishedToday,contentEvents:content.events},products:selected.length?selected:affiliateCatalog,selectedProducts:selected,affiliateCatalog,dataSources:[...new Set(opportunities.map((p)=>p.source))]});
   }
+  if(path==='/api/prospecting/stats'&&request.method==='GET'){try{return json({ok:true,stats:await loadProspectingStats(env)});}catch(e){return json({ok:false,error:e.message},500);}}
+  if(path==='/api/prospecting/leads'&&request.method==='GET'){try{return json({ok:true,leads:await loadProspecting(env,100)});}catch(e){return json({ok:false,error:e.message},500);}}
+  if(path==='/api/prospecting/lead'&&request.method==='POST'){try{const body=await request.json().catch(()=>({}));return json({ok:true,lead:await upsertProspectLead(env,body)},201);}catch(e){return json({ok:false,error:e.message},400);}}
+  if(path==='/api/prospecting/status'&&request.method==='POST'){try{const body=await request.json().catch(()=>({}));await updateProspectStatus(env,body.id,body.status);return json({ok:true,id:Number(body.id),status:body.status});}catch(e){return json({ok:false,error:e.message},400);}}
   if(path==='/api/content' && request.method==='GET'){
     if(!env?.DB)return json({published:0,items:[]});
     const result=await env.DB.prepare(`SELECT id,slug,title,meta_description AS metaDescription,content_type AS contentType,product_id AS productId,status,score,created_at AS createdAt,updated_at AS updatedAt FROM content_items WHERE status='published' ORDER BY created_at DESC LIMIT 50`).all();
