@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#111827"><meta name="description" content="NEX/DEYVIDTEC — Manutenções e Serviços">
+<link rel="manifest" href="./manifest.webmanifest">
+<title>NEX/DEYVIDTEC — Manutenções e Serviços</title>
+<link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+<header class="top"><div><strong>NEX/DEYVIDTEC</strong><span>MANUTENÇÕES E SERVIÇOS</span></div><button id="quickAdd" class="primary">+ OS</button></header>
+<main>
+<section id="home" class="screen active">
+<div class="hello"><h1>Controle de serviços</h1><p>Rápido, simples e feito para o celular.</p></div>
+<div class="cards"><button class="card" data-go="agenda"><b id="todayCount">0</b><span>Agendados hoje</span></button><button class="card" data-go="os"><b id="openCount">0</b><span>Ordens abertas</span></button><button class="card" data-go="finance"><b id="dueTotal">R$ 0,00</b><span>A receber</span></button></div>
+<div class="sectionHead"><h2>Próximos serviços</h2><button data-go="agenda">Ver agenda</button></div><div id="nextList" class="list"></div>
+</section>
+<section id="agenda" class="screen"><div class="title"><h1>Agenda</h1><button class="primary" id="newAgenda">+ Agendar</button></div><div class="tabs"><button class="tab active" data-period="day">Hoje</button><button class="tab" data-period="week">Semana</button><button class="tab" data-period="month">Mês</button></div><div id="agendaList" class="list"></div></section>
+<section id="os" class="screen"><div class="title"><h1>Ordens de serviço</h1><button class="primary" id="newOs">+ Nova OS</button></div><div id="osList" class="list"></div></section>
+<section id="clients" class="screen"><div class="title"><h1>Clientes</h1><button class="primary" id="newClient">+ Cliente</button></div><div id="clientList" class="list"></div></section>
+<section id="finance" class="screen"><div class="title"><h1>Financeiro</h1></div><div class="summary"><div><span>A receber</span><b id="financeDue">R$ 0,00</b></div><div><span>Recebido</span><b id="financePaid">R$ 0,00</b></div></div><div id="financeList" class="list"></div></section>
+<section id="services" class="screen"><div class="title"><h1>Serviços e preços</h1><button class="primary" id="newService">+ Serviço</button></div><div id="serviceList" class="list"></div></section>
+</main>
+<nav class="nav"><button data-go="home">⌂<small>Início</small></button><button data-go="agenda">◷<small>Agenda</small></button><button data-go="os">🔧<small>OS</small></button><button data-go="clients">👥<small>Clientes</small></button><button data-go="finance">R$<small>Financeiro</small></button></nav>
+<div id="modal" class="modal hidden"><div class="sheet"><div class="sheetHead"><h2 id="modalTitle"></h2><button id="closeModal">×</button></div><form id="form"></form></div></div>
+<footer>Tecnologia <b>NEXORA AI</b> · Sem atendimento de ar-condicionado</footer>
+<script src="./app.js"></script>
+</body></html>
