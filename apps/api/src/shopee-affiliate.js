@@ -5,7 +5,7 @@ function decodeHtml(value = '') {
 }
 
 function meta(html, property) {
-  const re = new RegExp('<meta[^>]+(?:property|name)=["\\']' + property + '["\\'][^>]+content=["\\']([^"\\']*)["\\'][^>]*>', 'i');
+  const re = new RegExp(`<meta[^>]+(?:property|name)=["']${property}["'][^>]+content=["']([^"']*)["'][^>]*>`, 'i');
   const m = html.match(re);
   return m ? decodeHtml(m[1]) : null;
 }
