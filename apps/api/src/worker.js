@@ -1,5 +1,6 @@
 import { createPayment, webhook, processWebhook, payout, snapshot, reset as resetGateway } from './gateway-sandbox.js';
 import { createAsaasClient, validateAsaasWebhook } from './asaas-sandbox.js';
+import { createAsaasProductionClient, validateAsaasProductionWebhook } from './asaas-production.js';
 import { selectCommercialProducts, buildOffer, createOrder, metricsFromGateway } from './commercial-flow.js';
 import { fetchMercadoLivreTrends, trendScores } from './mercadolivre-trends.js';
 import { getContent, loadContentStats } from './content-engine.js';
@@ -154,6 +155,27 @@ async function route(request,env){
   if(path==='/api/gateway/sandbox/reset'&&request.method==='POST'){resetGateway();orders.clear();return json({ok:true});}
   if(path==='/api/gateway/asaas/sandbox/create'&&request.method==='POST'){
     try{const body=await request.json().catch(()=>({}));const client=createAsaasClient({apiKey:env?.ASAAS_API_KEY,baseUrl:env?.ASAAS_BASE_URL});const customerPayload={name:body.customer?.name||'Cliente NEXORA Sandbox',email:body.customer?.email,externalReference:body.orderId};if(body.customer?.cpfCnpj)customerPayload.cpfCnpj=body.customer.cpfCnpj;const customer=await client.createCustomer(customerPayload);const payment=await client.createPayment({customer:customer.id,billingType:body.billingType||'PIX',value:Number(body.value),dueDate:body.dueDate||new Date(Date.now()+86400000).toISOString().slice(0,10),externalReference:body.orderId||crypto.randomUUID()},body.idempotencyKey);let pix=null;if((body.billingType||'PIX')==='PIX')pix=await client.getPixQrCode(payment.id);return json({ok:true,environment:'sandbox',customerId:customer.id,payment,pix});}catch(e){return json({ok:false,error:e.message,status:e.status||500},e.status&&e.status<500?e.status:500);}
+  }
+  if(path==='/api/gateway/asaas/production/create'&&request.method==='POST'){
+    try{
+      const body=await request.json().catch(()=>({}));
+      const client=createAsaasProductionClient({apiKey:env?.ASAAS_PRODUCTION_API_KEY});
+      const customerPayload={name:body.customer?.name||'Cliente NEXORA',email:body.customer?.email,externalReference:body.orderId||crypto.randomUUID()};
+      if(body.customer?.cpfCnpj)customerPayload.cpfCnpj=body.customer.cpfCnpj;
+      const customer=await client.createCustomer(customerPayload);
+      const payment=await client.createPayment({customer:customer.id,billingType:body.billingType||'PIX',value:Number(body.value),dueDate:body.dueDate||new Date(Date.now()+86400000).toISOString().slice(0,10),externalReference:body.orderId||crypto.randomUUID(),description:body.description||'Serviço NEXORA AI'},body.idempotencyKey);
+      let pix=null;
+      if((body.billingType||'PIX')==='PIX')pix=await client.getPixQrCode(payment.id);
+      return json({ok:true,environment:'production',customerId:customer.id,payment,pix});
+    }catch(e){return json({ok:false,error:e.message,status:e.status||500},e.status&&e.status<500?e.status:500);}
+  }
+  if(path==='/api/gateway/asaas/production/webhook'&&request.method==='POST'){
+    const token=env?.ASAAS_PRODUCTION_WEBHOOK_TOKEN;
+    if(!validateAsaasProductionWebhook(request,token))return json({ok:false,error:'ASAAS_PRODUCTION_WEBHOOK_UNAUTHORIZED'},401);
+    const body=await request.json().catch(()=>({})); const eventId=body.id||crypto.randomUUID(); const event=body.event; const payment=body.payment||{};
+    const externalReference=payment.externalReference||null;
+    if(externalReference){const existing=await findOrderByIdempotency(env,externalReference);if(existing)await updateOrderStatus(env,existing.id,event==='PAYMENT_RECEIVED'||event==='PAYMENT_CONFIRMED'?'paid':event,payment.id||null);}
+    return json({ok:true,received:true,idempotencyKey:eventId,event,paymentId:payment.id||null,externalReference,recordedSale:['PAYMENT_RECEIVED','PAYMENT_CONFIRMED'].includes(event)});
   }
   if(path==='/api/gateway/asaas/sandbox/webhook'&&request.method==='POST'){
     const token=env?.ASAAS_WEBHOOK_TOKEN;if(!validateAsaasWebhook(request,token))return json({ok:false,error:'ASAAS_WEBHOOK_UNAUTHORIZED'},401);const body=await request.json().catch(()=>({}));const eventId=body.id||crypto.randomUUID();const event=body.event;const payment=body.payment||{};return json({ok:true,received:true,idempotencyKey:eventId,event,paymentId:payment.id||null,shouldRecordSale:['PAYMENT_RECEIVED','PAYMENT_CONFIRMED'].includes(event),shouldReverse:['PAYMENT_REFUNDED','PAYMENT_PARTIALLY_REFUNDED','PAYMENT_CHARGEBACK_REQUESTED'].includes(event)});
