@@ -29,6 +29,7 @@ export function createAsaasClient({ apiKey, baseUrl, fetchImpl = fetch } = {}) {
     createPayment: (body, idempotencyKey) => request('/payments', { method: 'POST', body, idempotencyKey }),
     getPixQrCode: paymentId => request(`/payments/${encodeURIComponent(paymentId)}/pixQrCode`),
     createWebhook: body => request('/webhooks', { method: 'POST', body }),
+    createCheckout: (body, idempotencyKey) => request('/checkouts', { method: 'POST', body, idempotencyKey }),
     getPayment: paymentId => request(`/payments/${encodeURIComponent(paymentId)}`),
     baseUrl: resolvedBaseUrl
   };
