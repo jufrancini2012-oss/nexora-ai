@@ -137,6 +137,28 @@ async function route(request,env){
     try{const trends=await fetchMercadoLivreTrends(env?.MELI_ACCESS_TOKEN),observedAt=await persistTrendOpportunities(env,trends);return json({ok:true,source:'mercadolivre_trends',count:trends.length,observedAt},200);}catch(e){const status=e.message==='MELI_ACCESS_TOKEN_NOT_CONFIGURED'||e.message==='D1_NOT_CONFIGURED'?503:502;return json({ok:false,error:e.message},status);}
   }
   if(path==='/api/commercial/plan'&&request.method==='GET')return json({ok:true,mode:'sandbox',autonomy:policy.autonomyEnabled,opportunities:await commercialPlan(env)});
+  if(path==='/api/payment/checkout'&&request.method==='POST'){
+    try{
+      const body=await request.json().catch(()=>({}));
+      const value=Number(body.value);
+      if(!Number.isFinite(value)||value<=0)return json({ok:false,error:'INVALID_PAYMENT_VALUE'},400);
+      const methods=Array.isArray(body.billingTypes)&&body.billingTypes.length?body.billingTypes.filter(x=>['PIX','CREDIT_CARD'].includes(x)):['PIX','CREDIT_CARD'];
+      const orderId=body.orderId||crypto.randomUUID();
+      const checkoutBody={
+        billingTypes:methods,
+        chargeTypes:body.chargeTypes||['DETACHED'],
+        minutesToExpire:Math.min(1440,Math.max(10,Number(body.minutesToExpire||60))),
+        externalReference:orderId,
+        callback:{successUrl:body.successUrl||new URL('/pagamento/sucesso',request.url).toString(),cancelUrl:body.cancelUrl||new URL('/pagamento/cancelado',request.url).toString(),expiredUrl:body.expiredUrl||new URL('/pagamento/expirado',request.url).toString()},
+        items:[{externalReference:body.productId||orderId,name:body.name||'Produto/Serviço NEXORA AI',description:body.description||'Pagamento NEXORA AI',quantity:1,value}]
+      };
+      if(body.customer)checkoutBody.customerData=body.customer;
+      if(body.chargeTypes?.includes('INSTALLMENT'))checkoutBody.installment={maxInstallmentCount:Math.min(21,Math.max(1,Number(body.maxInstallmentCount||12)))};
+      const client=createAsaasProductionClient({apiKey:env?.ASAAS_PRODUCTION_API_KEY});
+      const checkout=await client.createCheckout(checkoutBody,body.idempotencyKey||orderId);
+      return json({ok:true,environment:'production',orderId,checkout,link:checkout.link||('https://asaas.com/checkoutSession/show?id='+encodeURIComponent(checkout.id))},201);
+    }catch(e){return json({ok:false,error:e.message,status:e.status||500},e.status&&e.status<500?e.status:500);}
+  }
   if(path==='/api/commercial/checkout'&&request.method==='POST'){
     const body=await request.json().catch(()=>({}));try{const existing=await findOrderByIdempotency(env,body.idempotencyKey);if(existing)return json({ok:true,mode:'sandbox',idempotent:true,order:existing,offer:existing.offer},200);const product=await findProduct(env,body.productId);if(!product)return json({ok:false,error:'PRODUCT_NOT_ELIGIBLE'},422);const offer=buildOffer(product);const order=createOrder({offer,customer:body.customer,idempotencyKey:body.idempotencyKey});const payment=await createPayment({amount:offer.price,orderId:order.id,idempotencyKey:body.idempotencyKey});const stored={...order,paymentId:payment.id,offer};await persistOrder(env,stored);return json({ok:true,mode:'sandbox',order:stored,offer,payment,next:'POST /api/commercial/webhook after a signed sandbox payment event'},201);}catch(e){return json({ok:false,error:e.message},400);}
   }
