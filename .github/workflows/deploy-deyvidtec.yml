@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - 'apps/web/deyvidtec/**'
+      - 'apps/api/src/micro-partnership-worker.js'
       - '.github/workflows/deploy-deyvidtec.yml'
   workflow_dispatch:
 
