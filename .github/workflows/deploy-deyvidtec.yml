@@ -22,5 +22,10 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: npx --yes wrangler@4 deploy
-
-# Publicação dedicada do DeyvidTEC
+      - name: Verificar link público
+        run: |
+          set -e
+          sleep 5
+          BODY=$(curl -fsSL --retry 5 --retry-delay 3 https://nexora-ai.ju-francini2012.workers.dev/deyvidtec/)
+          echo "$BODY" | grep -q "NEX/DEYVIDTEC"
+          echo "DEYVIDTEC_PUBLIC_OK"
