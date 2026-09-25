@@ -1,6 +1,7 @@
 import app from './autonomous-worker.js';
 import { ensureAffiliateCatalog } from './affiliate-catalog.js';
 import { handlePartnerRedirect, loadMicroPartnerships, runMicroPartnershipCycle } from './micro-partnerships.js';
+import { parseSmartCatalog, saveSmartProducts, loadSmartProducts } from './smart-catalog.js';
 
 function json(data,status=200){
   return new Response(JSON.stringify(data),{status,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store','access-control-allow-origin':'*'});
@@ -18,7 +19,7 @@ export default {
         return json({ok:false,error:error.message},500);
       }
     }
-    if(url.pathname==='/api/microparcerias' && request.method==='GET'){
+    if(url.pathname==='/api/smart-catalog' && request.method==='GET'){\n      try{return json({ok:true,products:await loadSmartProducts(env)});}\n      catch(error){return json({ok:false,error:error.message},500);}\n    }\n    if(url.pathname==='/api/smart-catalog' && request.method==='POST'){\n      try{const body=await request.json().catch(()=>({}));const products=parseSmartCatalog(body.input||'');if(!products.length)return json({ok:false,error:'SMART_CATALOG_EMPTY'},400);await saveSmartProducts(env,products);return json({ok:true,count:products.length,products},201);}\n      catch(error){return json({ok:false,error:error.message},500);}\n    }\n    if(url.pathname==='/api/microparcerias' && request.method==='GET'){
       try{return json({ok:true,microparcerias:await loadMicroPartnerships(env)});}
       catch(error){return json({ok:false,error:error.message},500);}
     }
