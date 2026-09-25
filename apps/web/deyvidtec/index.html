@@ -1,6 +1,6 @@
 <!doctype html><html lang="pt-BR"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#06284a"><title>NEX/DEYVIDTEC</title>
+<meta name="theme-color" content="#06284a"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><link rel="manifest" href="manifest.json"><title>NEX/DEYVIDTEC</title>
 <style>
 *{box-sizing:border-box}body{margin:0;background:#eef3f8;font-family:Arial;color:#17324d}.app{max-width:520px;margin:auto;min-height:100vh;padding-bottom:75px}
 header{background:linear-gradient(145deg,#06284a,#0a4b82);color:white;padding:22px 18px;border-radius:0 0 22px 22px}.brand{font-size:21px;font-weight:800}.sub{font-size:11px;letter-spacing:1px}.hello{margin-top:18px;font-size:18px;font-weight:bold}
@@ -44,4 +44,4 @@ function pay(id){let o=D.orders.find(x=>x.id==id);if(o){o.status='Pago';saveD();
 function chargeId(id){let o=D.orders.find(x=>x.id==id);if(o){D.bills.unshift({client:o.client,value:o.value,status:'Pendente'});saveD();show('billing');alert('Cobrança preparada para o Mercado Pago.')}}
 function charge(){let o=D.orders.find(x=>!['Pago','Cancelado'].includes(x.status));if(o)chargeId(o.id);else alert('Cadastre uma ordem de serviço primeiro.')}
 render();
-</script></body></html>
+</script><script>if("serviceWorker" in navigator){navigator.serviceWorker.register("sw.js").catch(()=>{});}</script></body></html>
