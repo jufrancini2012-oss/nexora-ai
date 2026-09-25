@@ -10,6 +10,9 @@ function json(data,status=200){
 export default {
   async fetch(request,env,ctx){
     const url=new URL(request.url);
+    if(url.pathname==='/deyvidtec' || url.pathname==='/deyvidtec/'){
+      return env.ASSETS.fetch(new Request(new URL('/deyvidtec/index.html',request.url),request));
+    }
     if(url.pathname.startsWith('/parceiro/')){
       try{
         await ensureAffiliateCatalog(env);
