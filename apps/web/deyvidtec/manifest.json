@@ -1,0 +1,11 @@
+{
+  "name": "NEX/DEYVIDTEC",
+  "short_name": "DeyvidTEC",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#eef3f8",
+  "theme_color": "#06284a",
+  "lang": "pt-BR",
+  "description": "Controle de serviços técnicos do DeyvidTEC."
+}
